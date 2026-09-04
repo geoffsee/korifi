@@ -12,6 +12,7 @@ Reusable Pulumi components and pure helpers for installing Korifi.
 | `dependencies.ts` | Job running release-tested `install-dependencies.sh` |
 | `local-registry.ts` | kind in-cluster registry + pull-secret helper |
 | `korifi-release.ts` | Helm `Release` wrapper |
+| `kind-images.ts` | Build Korifi images from the checkout and `kind load` them |
 | `contour-gateway.ts` | GatewayClass (+ NodePort params on kind) |
 | `knative.ts` | Knative Operator Helm + `KnativeServing` CR (Kourier ClusterIP) |
 | `ecr-kpack-irsa.ts` | Annotate kpack controller SA for ECR |

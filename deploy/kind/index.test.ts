@@ -51,7 +51,9 @@ test("knative-runner is the default run reconciler", () => {
 	expect(all).toContain("KnativeServing");
 	expect(all).toContain("domain: appDomain");
 	expect(all).toContain("localChart");
-	expect(all).not.toContain("korifi-controllers:knative-runner");
+	expect(all).toContain("KindKorifiImages");
+	expect(all).toContain("images.controllersImage");
+	expect(all).not.toContain("cloudfoundry/korifi-controllers:latest");
 });
 
 test("auth flow uses cf login against UAA", () => {

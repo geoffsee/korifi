@@ -8,6 +8,7 @@
  *   LocalRegistry            in-cluster docker-registry NodePort 30050
  *   KorifiDependencies       cert-manager, kpack, contour, metrics-server
  *   UaaVcluster              vcluster + UAA + TLS NodePort proxy :30443
+ *   KindKorifiImages         docker build + kind load controllers/api/migration
  *   KorifiRelease            Korifi Helm chart (knative-runner, experimental.uaa)
  *   KnativeServing           Operator Helm + KnativeServing CR (Kourier ClusterIP)
  *   ContourGateway           NodePort GatewayClass params
@@ -23,6 +24,7 @@ import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
 import {
 	ContourGateway,
+	KindKorifiImages,
 	KnativeServing,
 	KorifiDependencies,
 	KorifiNamespaces,
@@ -103,9 +105,20 @@ const korifiPullSecret = registry.pullSecret(
 	},
 );
 
-// In-tree chart for experimental.uaa / knative-runner. Controllers image
-// stays the chart default (Docker Hub); the local registry is for apps/kpack.
-const localChart = path.join(__dirname, "..", "..", "helm", "korifi");
+// In-tree chart + images built from this checkout. Hub *:latest is the last
+// release (no knative-runner). The local registry is for apps/kpack only.
+const repoRoot = path.join(__dirname, "..", "..");
+const localChart = path.join(repoRoot, "helm", "korifi");
+
+const images = new KindKorifiImages(
+	"images",
+	{
+		clusterName,
+		repoRoot,
+		dependsOn: [cluster],
+	},
+	{ dependsOn: [cluster] },
+);
 
 const dependencies = new KorifiDependencies(
 	"deps",
@@ -154,6 +167,11 @@ const korifi = new KorifiRelease(
 				gatewayNamespace: namespaces.gatewayName,
 				gatewayPorts: kindGatewayPorts,
 			},
+			images: {
+				controllers: images.controllersImage,
+				api: images.apiImage,
+				migration: images.migrationImage,
+			},
 			extraValues: {
 				helm: { hooksImage: "alpine/k8s:1.36.4" },
 			},
@@ -165,9 +183,10 @@ const korifi = new KorifiRelease(
 			korifiPullSecret,
 			namespaces.gateway,
 			uaa.proxyService,
+			images.loaded,
 		],
 	},
-	{ dependsOn: [dependencies, registry, uaa] },
+	{ dependsOn: [dependencies, registry, uaa, images] },
 );
 
 const knative = new KnativeServing(
@@ -235,6 +254,8 @@ export const cfAdminUserName = adminUserName;
 export const gatewayClass = gateway.gatewayClass.metadata.name;
 export const registryHost = registry.clusterHost;
 export const knativeServing = knative.serving.metadata.name;
+export const controllersImage = images.controllersImage;
+export const apiImage = images.apiImage;
 
 export const postgres = brokerServices.postgres
 	? {
