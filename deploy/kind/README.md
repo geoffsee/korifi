@@ -6,8 +6,9 @@ cluster with ingress NodePorts, an in-cluster registry, Korifi dependencies
 `reconcilers.run=knative-runner`.
 
 Reusable pieces live in [`../lib`](../lib) (`KorifiDependencies`,
-`LocalRegistry`, `KorifiRelease`, `ContourGateway`, …) and are unit-tested
-there.
+`LocalRegistry`, `KorifiRelease`, `ContourGateway`, `ServiceBrokerServices`,
+…) and are unit-tested there. After `pulumi up`, stack outputs include
+`postgres` admin connection facts for a follow-on OSB broker.
 
 ## Quick start
 

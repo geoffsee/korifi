@@ -162,4 +162,8 @@ describe("versions", () => {
 		expect(versions.korifiInstallerImage).toContain("korifi-installer");
 		expect(versions.knativeServing).toMatch(/^\d+\.\d+\.\d+$/);
 	});
+
+	test("pins a postgres image for ServiceBrokerServices", () => {
+		expect(versions.postgresImage).toMatch(/^postgres:/);
+	});
 });

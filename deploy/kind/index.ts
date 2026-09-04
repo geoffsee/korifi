@@ -3,23 +3,26 @@
  *
  * Layers (each maps to INSTALL.kind.md / the kind installer job):
  *
- *   cluster.ts          kind cluster + containerd registry trust
- *   LocalRegistry       in-cluster docker-registry NodePort 30050
- *   KorifiDependencies  cert-manager, kpack, contour, knative, metrics-server
- *   KorifiRelease       Korifi Helm chart (knative-runner)
- *   ContourGateway      NodePort GatewayClass params
+ *   cluster.ts               kind cluster + containerd registry trust
+ *   LocalRegistry            in-cluster docker-registry NodePort 30050
+ *   KorifiDependencies       cert-manager, kpack, contour, knative, metrics-server
+ *   KorifiRelease            Korifi Helm chart (knative-runner)
+ *   ContourGateway           NodePort GatewayClass params
+ *   ServiceBrokerServices    shared Postgres (broker-ready connection facts)
  *
  * Usage:
  *   cd deploy/kind && bun install
  *   export PULUMI_CONFIG_PASSPHRASE=...
  *   pulumi up --stack dev
  */
+import * as pulumi from "@pulumi/pulumi";
 import {
 	ContourGateway,
 	KorifiDependencies,
 	KorifiNamespaces,
 	KorifiRelease,
 	LocalRegistry,
+	ServiceBrokerServices,
 	kindGatewayPorts,
 	kindKpackBuilderRepository,
 	kindRegistryPrefix,
@@ -115,6 +118,18 @@ const gateway = new ContourGateway(
 	{ dependsOn: [korifi] },
 );
 
+// Broker backends. Postgres only for now; flip `enable` (and add installers
+// in deploy/lib/service-broker-services.ts) to grow the set.
+const brokerServices = new ServiceBrokerServices(
+	"broker-services",
+	{
+		provider: cluster.provider,
+		enable: { postgres: true },
+		dependsOn: [korifi.release],
+	},
+	{ dependsOn: [korifi] },
+);
+
 export const kubeconfig = kubeconfigPath;
 export const cfApiUrl = `https://${apiUrl}`;
 export const appsDomain = `*.${appDomain}`;
@@ -122,3 +137,14 @@ export const orgHint = "cf create-org org && cf create-space -o org space";
 export const authHint = `cf api ${cfApiUrl} --skip-ssl-validation && cf auth ${adminUserName}`;
 export const gatewayClass = gateway.gatewayClass.metadata.name;
 export const registryHost = registry.clusterHost;
+
+/** Broker-facing Postgres admin facts (password is a secret output). */
+export const postgres = brokerServices.postgres
+	? {
+			host: brokerServices.postgres.host,
+			port: brokerServices.postgres.port,
+			adminUser: brokerServices.postgres.adminUser,
+			adminPassword: pulumi.secret(brokerServices.postgres.adminPassword),
+			adminUrl: pulumi.secret(brokerServices.postgres.adminUrl!),
+		}
+	: undefined;

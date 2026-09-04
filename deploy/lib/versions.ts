@@ -14,6 +14,8 @@ export const versions = {
 	registryChart: "3.0.0",
 	/** Knative Serving version applied by install-dependencies.sh. */
 	knativeServing: "1.23.0",
+	/** Shared Postgres image for ServiceBrokerServices (OSB broker backend). */
+	postgresImage: "postgres:16-alpine",
 } as const;
 
 /** Helm chart URL for a released Korifi version. */

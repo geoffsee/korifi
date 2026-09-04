@@ -14,6 +14,7 @@ Reusable Pulumi components and pure helpers for installing Korifi.
 | `korifi-release.ts` | Helm `Release` wrapper |
 | `contour-gateway.ts` | GatewayClass (+ NodePort params on kind) |
 | `ecr-kpack-irsa.ts` | Annotate kpack controller SA for ECR |
+| `service-broker-services.ts` | Shared Postgres (etc.) for OSB brokers — enable flags per service |
 
 Stacks under `deploy/{kind,eks,gke}` compose these components; they do not
 duplicate Helm value logic.
