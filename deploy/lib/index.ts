@@ -9,6 +9,10 @@ export {
 	KorifiDependencies,
 	type KorifiDependenciesArgs,
 } from "./dependencies";
+export {
+	KnativeServing,
+	type KnativeServingArgs,
+} from "./knative";
 export { EcrKpackIrsa, type EcrKpackIrsaArgs } from "./ecr-kpack-irsa";
 export {
 	KorifiRelease,
@@ -30,6 +34,12 @@ export {
 	type ServiceBrokerServiceConnection,
 	type ServiceBrokerServicesArgs,
 } from "./service-broker-services";
+export { UaaCerts, type UaaCertsArgs } from "./uaa-certs";
+export {
+	UaaVcluster,
+	kindUaaNodePort,
+	type UaaVclusterArgs,
+} from "./uaa-vcluster";
 export {
 	buildKorifiValues,
 	eksKpackBuilderRepository,
@@ -43,4 +53,4 @@ export {
 	type KorifiPlatform,
 	type KorifiValuesInput,
 } from "./values";
-export { korifiChartUrl, versions } from "./versions";
+export { korifiChartUrl, kindUaaHostname, versions } from "./versions";

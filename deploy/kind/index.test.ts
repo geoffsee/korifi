@@ -24,22 +24,38 @@ test("kind stack composes shared lib components", () => {
 	expect(all).toContain("LocalRegistry");
 	expect(all).toContain("ContourGateway");
 	expect(all).toContain("ServiceBrokerServices");
+	expect(all).toContain("UaaCerts");
+	expect(all).toContain("UaaVcluster");
+	expect(all).toContain("KnativeServing");
 	expect(all).toContain('platform: "kind"');
 	expect(all).toContain("insecureTlsMetricsServer: true");
 	expect(all).toContain("NodePortService");
+	expect(all).toContain("uaaUrl");
+	expect(all).toContain("oidc");
 });
 
-test("kind-config.yaml matches INSTALL.kind.md port mappings", () => {
+test("kind-config.yaml matches INSTALL.kind.md port mappings plus UAA", () => {
 	const config = fs.readFileSync(path.join(dir, "kind-config.yaml"), "utf8");
 	expect(config).toContain("containerPort: 32080");
 	expect(config).toContain("hostPort: 80");
 	expect(config).toContain("containerPort: 32443");
 	expect(config).toContain("hostPort: 443");
 	expect(config).toContain("containerPort: 30050");
+	expect(config).toContain("containerPort: 30443");
 	expect(config).toContain('config_path = "/etc/containerd/certs.d"');
 });
 
 test("knative-runner is the default run reconciler", () => {
 	expect(all).toContain("knative-runner");
 	expect(all).toContain("kindRegistryPrefix");
+	expect(all).toContain("KnativeServing");
+	expect(all).toContain("domain: appDomain");
+	expect(all).toContain("localChart");
+	expect(all).not.toContain("korifi-controllers:knative-runner");
+});
+
+test("auth flow uses cf login against UAA", () => {
+	expect(all).toContain("cf login");
+	expect(all).toContain("adminEmail");
+	expect(all).not.toContain("cf auth kubernetes-admin");
 });

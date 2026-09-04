@@ -12,11 +12,20 @@ export const versions = {
 		"index.docker.io/cloudfoundry/korifi-installer@sha256:dfe1680d13550dfd5ff2abefbe778c180cafa07ff055a5a82802df0f2551aa30",
 	/** twuni/docker-registry chart (kind local registry). */
 	registryChart: "3.0.0",
-	/** Knative Serving version applied by install-dependencies.sh. */
+	/** Knative Operator Helm chart (https://knative.github.io/operator). */
+	knativeOperatorChart: "v1.23.1",
+	/** KnativeServing CR spec.version — must stay in the Operator's support range. */
 	knativeServing: "1.23.0",
 	/** Shared Postgres image for ServiceBrokerServices (OSB broker backend). */
 	postgresImage: "postgres:16-alpine",
+	/** loft-sh/vcluster chart (UAA isolation on kind). */
+	vclusterChart: "0.36.1",
+	/** Official UAA image (cfidentity/uaa). */
+	uaaImage: "docker.io/cfidentity/uaa:v79.7.0",
 } as const;
+
+/** Cert CN / SAN hostname for the UAA TLS proxy (IP SANs include 127.0.0.1). */
+export const kindUaaHostname = "uaa.127.0.0.1.nip.io" as const;
 
 /** Helm chart URL for a released Korifi version. */
 export function korifiChartUrl(version: string = versions.korifi): string {
