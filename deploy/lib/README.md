@@ -15,6 +15,7 @@ Reusable Pulumi components and pure helpers for installing Korifi.
 | `contour-gateway.ts` | GatewayClass (+ NodePort params on kind) |
 | `ecr-kpack-irsa.ts` | Annotate kpack controller SA for ECR |
 | `service-broker-services.ts` | Shared Postgres (etc.) for OSB brokers — enable flags per service |
+| `custom-broker-service.example.ts` | Copy-paste template for adding a custom broker backend |
 
 Stacks under `deploy/{kind,eks,gke}` compose these components; they do not
 duplicate Helm value logic.
