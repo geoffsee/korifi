@@ -127,6 +127,23 @@ fi
 			},
 			{ parent: this, dependsOn: [vclusterRelease] },
 		);
+		// Command resources only run when their inputs change. Re-check the
+		// process on every preview/update so a canceled Pulumi process or host
+		// restart cannot leave the virtual provider pointed at a dead forward.
+		const apiForwardReady = command.local.runOutput(
+			{
+				command: vclusterForwardScript({
+					hostKubeconfig,
+					namespace: this.namespace,
+					svc: vclusterName,
+					pidFile: pfPidFile,
+					logFile: pfLogFile,
+					port: apiPort,
+					mode: "update",
+				}),
+			},
+			{ parent: this, dependsOn: [apiForward] },
+		);
 
 		const kubeconfigCmd = new command.local.Command(
 			`${name}-kubeconfig`,
@@ -155,12 +172,14 @@ exit 1
 			},
 		);
 
-		const pulumiKubeconfig = kubeconfigCmd.stdout.apply((raw) =>
-			raw.replace(
+		const pulumiKubeconfig = pulumi
+			.all([kubeconfigCmd.stdout, apiForwardReady.stdout])
+			.apply(([raw]) =>
+				raw.replace(
 				/server:\s*https?:\/\/[^\s]+/,
 				`server: https://127.0.0.1:${apiPort}`,
-			),
-		);
+				),
+			);
 		this.inClusterKubeconfig = kubeconfigCmd.stdout.apply((raw) =>
 			raw.replace(
 				/server:\s*https?:\/\/[^\s]+/,
