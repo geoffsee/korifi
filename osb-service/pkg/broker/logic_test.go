@@ -33,10 +33,10 @@ func TestCatalogDedicatedEngines(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := b.Catalog()
-	if len(c.Services) != 3 {
+	if len(c.Services) != 4 {
 		t.Fatalf("unexpected catalog: %#v", c)
 	}
-	want := []string{"mongodb", "mysql", "postgres"}
+	want := []string{"mongodb", "mysql", "ozone", "postgres"}
 	for i, name := range want {
 		if c.Services[i].Name != name || c.Services[i].Plans[0].Name != "dedicated" {
 			t.Fatalf("service %d: %#v", i, c.Services[i])
@@ -128,8 +128,46 @@ func TestBindMongoCredentials(t *testing.T) {
 	}
 }
 
+func TestBindOzoneCredentials(t *testing.T) {
+	b, err := NewBusinessLogic(Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	_, status, err := b.Provision(id, ProvisionRequest{ServiceID: OzoneServiceID, PlanID: OzonePlanID})
+	if err != nil || status != http.StatusCreated {
+		t.Fatalf("provision: %d %v", status, err)
+	}
+	resp, status, err := b.Bind(id, "bbbbbbbb-cccc-dddd-eeee-ffffffffffff", BindRequest{ServiceID: OzoneServiceID, PlanID: OzonePlanID})
+	if err != nil || status != http.StatusCreated {
+		t.Fatalf("bind: %d %v", status, err)
+	}
+	for _, key := range []string{"uri", "endpoint", "access_key_id", "secret_access_key", "hostname", "bucket"} {
+		if resp.Credentials[key] == nil || resp.Credentials[key] == "" {
+			t.Fatalf("missing credential %q: %#v", key, resp.Credentials)
+		}
+	}
+	if resp.Credentials["use_ssl"] != true || resp.Credentials["tls"] != true || resp.Credentials["path_style"] != true {
+		t.Fatalf("tls flags: %#v", resp.Credentials)
+	}
+	endpoint, _ := resp.Credentials["endpoint"].(string)
+	if !strings.HasPrefix(endpoint, "https://") {
+		t.Fatalf("endpoint missing https: %s", endpoint)
+	}
+}
+
+func TestGenerateTLS(t *testing.T) {
+	mat, err := generateTLS("example.test", []string{"example.test", "svc.cluster.local"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mat.CertPEM) == 0 || len(mat.KeyPEM) == 0 || len(mat.PKCS12) == 0 || mat.Password == "" {
+		t.Fatalf("incomplete tls material: %#v", mat)
+	}
+}
+
 func TestSyncedHost(t *testing.T) {
-	c := &everestClient{namespace: "everest", hostNS: "everest-vcluster", vclusterName: "everest"}
+	c := &vclusterClient{namespace: "everest", hostNS: "everest-vcluster", vclusterName: "everest"}
 	got := c.syncedHost("", "pabc", "primary")
 	want := "pabc-primary-everest-x-everest.everest-vcluster.svc.cluster.local"
 	if got != want {
