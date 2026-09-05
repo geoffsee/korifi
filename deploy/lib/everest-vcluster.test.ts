@@ -9,9 +9,9 @@ const text = fs.readFileSync(
 
 test("Everest vcluster installs OpenEverest operators only", () => {
 	expect(text).toContain('chart: "vcluster"');
-	expect(text).toContain('chart: "victoria-metrics-operator-crds"');
 	expect(text).toContain('chart: "openeverest"');
-	expect(text).toContain("dependsOn: [systemNs, monitoringCrds]");
+	expect(text).toContain("dependsOn: [systemNs]");
+	expect(text).not.toContain('chart: "victoria-metrics-operator-crds"');
 	expect(text).toContain("kindEverestVclusterLocalApiPort");
 	expect(text).toContain("command.local.runOutput");
 	expect(text).toContain("apiForwardReady.stdout");

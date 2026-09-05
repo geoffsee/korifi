@@ -216,9 +216,6 @@ describe("versions", () => {
 
 	test("pins postgres, vcluster, and uaa images", () => {
 		expect(versions.openeverestChart).toMatch(/^\d+\.\d+\.\d+$/);
-		expect(versions.victoriaMetricsOperatorCrdsChart).toMatch(
-			/^\d+\.\d+\.\d+$/,
-		);
 		expect(versions.vclusterChart).toMatch(/^\d+\.\d+\.\d+$/);
 		expect(versions.uaaImage).toContain("cfidentity/uaa");
 	});

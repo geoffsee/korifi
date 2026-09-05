@@ -18,8 +18,6 @@ export const versions = {
 	knativeServing: "1.23.0",
 	/** OpenEverest Helm chart (v1 line; operators isolated in a vcluster). */
 	openeverestChart: "1.16.2",
-	/** VictoriaMetrics CRDs required by the OpenEverest 1.16.2 controller. */
-	victoriaMetricsOperatorCrdsChart: "0.0.1",
 	/** loft-sh/vcluster chart (UAA isolation on kind). */
 	vclusterChart: "0.36.1",
 	/** Official UAA image (cfidentity/uaa). */
