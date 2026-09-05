@@ -47,10 +47,10 @@ const (
 
 // Env vars Knative injects / reserves — must not appear in the container env.
 var knativeReservedEnv = map[string]struct{}{
-	"PORT":           {},
-	"K_REVISION":     {},
+	"PORT":            {},
+	"K_REVISION":      {},
 	"K_CONFIGURATION": {},
-	"K_SERVICE":      {},
+	"K_SERVICE":       {},
 }
 
 type AppWorkloadToKnativeServiceConverter struct {
@@ -122,20 +122,18 @@ func (r *AppWorkloadToKnativeServiceConverter) Convert(appWorkload *korifiv1alph
 	}
 
 	labels := map[string]string{
-		controllers.LabelGUID:            appWorkload.Spec.GUID,
-		LabelProcessType:                 appWorkload.Spec.ProcessType,
-		LabelVersion:                     appWorkload.Spec.Version,
-		LabelAppGUID:                     appWorkload.Spec.AppGUID,
-		LabelAppWorkloadGUID:             appWorkload.Name,
+		controllers.LabelGUID: appWorkload.Spec.GUID,
+		LabelProcessType:      appWorkload.Spec.ProcessType,
+		LabelVersion:          appWorkload.Spec.Version,
+		LabelAppGUID:          appWorkload.Spec.AppGUID,
+		LabelAppWorkloadGUID:  appWorkload.Name,
 		// Korifi's log-cache/process stats look up instance index via this
 		// StatefulSet-standard label. Knative pods don't get it automatically.
 		"apps.kubernetes.io/pod-index": "0",
 	}
 
 	instances := max(appWorkload.Spec.Instances, 0)
-	// Match CF desired instances for min-scale so Contour→pod routes stay up while
-	// the app is started. (Scale-from-zero via CF routes needs the route reconciler
-	// to target the Knative activator; Contour currently selects pods by label.)
+	// Desired count: min=max=N. Stopped (N=0): min 0, max 1 so the Service remains.
 	templateAnnotations := map[string]string{
 		AnnotationAppID:       appWorkload.Spec.AppGUID,
 		AnnotationVersion:     appWorkload.Spec.Version,
