@@ -29,6 +29,8 @@ test("osb-service broker serves HTTPS and registers CFServiceBroker", () => {
 	expect(text).toContain("everest-kubeconfig");
 	expect(text).toContain("everest-kubeconfig-version");
 	expect(text).toContain("metadata.resourceVersion");
+	expect(text).toContain("AIGATEWAY_KUBECONFIG");
+	expect(text).toContain("aigateway-kubeconfig");
 });
 
 test("image pull policy defaults to IfNotPresent, not Never", () => {

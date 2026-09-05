@@ -24,6 +24,12 @@ export const versions = {
 	vclusterChart: "0.36.1",
 	/** Last chart compatible with the published 2.8.0 operator image. */
 	opensearchOperatorChart: "2.8.0",
+	/** Envoy Gateway Helm chart (OCI docker.io/envoyproxy/gateway-helm). */
+	envoyGatewayChart: "v1.8.1",
+	/** Envoy AI Gateway Helm charts (CRDs + controller). */
+	aiGatewayChart: "v1.1.0",
+	/** vLLM OpenAI-compatible server image (CPU args set in the vcluster fleet). */
+	vllmImage: "docker.io/vllm/vllm-openai:v0.10.0",
 	/** Official UAA image (cfidentity/uaa). */
 	uaaImage: "docker.io/cfidentity/uaa:v79.7.0",
 } as const;
