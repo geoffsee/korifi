@@ -6,10 +6,10 @@
  *
  * Backing stores come from ServiceBrokerServices via `backends`. Everest
  * backs postgres, mysql, and mongodb dedicated clusters. Apache Ozone,
- * NATS, and OpenSearch dedicated instances are created in the same vcluster.
+ * NATS, OpenSearch, and Redis dedicated instances are created in the same vcluster.
  *
  * Plans default to admin visibility; `cf enable-service-access postgres`
- * (and `mysql`, `mongodb`, `ozone`, `nats`, `opensearch`) after install.
+ * (and `mysql`, `mongodb`, `ozone`, `nats`, `opensearch`, `redis`) after install.
  */
 import * as path from "node:path";
 import * as k8s from "@pulumi/kubernetes";

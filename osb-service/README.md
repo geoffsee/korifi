@@ -4,8 +4,9 @@ Open Service Broker with a catalog of **offerings**. Dedicated PostgreSQL,
 Percona XtraDB (MySQL), and MongoDB clusters are provisioned via OpenEverest.
 Dedicated Apache Ozone clusters (S3 API) and NATS JetStream servers are
 provisioned as Kubernetes resources in the same data-plane vcluster.
-OpenSearch clusters are provisioned via the OpenSearch operator. Add
-another file next to `pkg/broker/postgres.go` that implements `Offering`
+OpenSearch clusters are provisioned via the OpenSearch operator. Dedicated
+Redis servers are provisioned as Kubernetes resources in the same vcluster.
+Add another file next to `pkg/broker/postgres.go` that implements `Offering`
 and register it in `newDefaultOfferings`.
 
 The process serves HTTPS on port 8443. TLS cert/key files are required
@@ -26,5 +27,6 @@ DatabaseCluster. `cf create-service ozone dedicated` creates one Apache
 Ozone cluster (OM, SCM, datanode, HTTPS S3 gateway). `cf create-service
 nats dedicated` creates one NATS JetStream server with TLS.
 `cf create-service opensearch dedicated` creates one OpenSearch cluster.
+`cf create-service redis dedicated` creates one Redis server with TLS.
 The broker mounts a
 TLS secret (cert-manager self-signed unless `tlsSecretName` is set).
