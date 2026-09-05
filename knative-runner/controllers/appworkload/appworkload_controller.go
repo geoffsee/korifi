@@ -35,6 +35,14 @@ var knativeServiceGVK = schema.GroupVersionKind{
 	Kind:    "Service",
 }
 
+// Overridable in tests to exercise error paths.
+var (
+	marshalSpecJSON = json.Marshal
+	setNestedMap    = unstructured.SetNestedMap
+)
+
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -generate
+//counterfeiter:generate -o ./fake -fake-name WorkloadToKnativeServiceConverter . WorkloadToKnativeServiceConverter
 type WorkloadToKnativeServiceConverter interface {
 	Convert(appWorkload *korifiv1alpha1.AppWorkload) (*unstructured.Unstructured, error)
 }
@@ -178,7 +186,7 @@ func (r *AppWorkloadReconciler) ReconcileResource(ctx context.Context, appWorklo
 		// Persist the desired-spec hash as a label (annotations can be stripped).
 		isCreate := created.GetUID() == ""
 		if isCreate || liveHash != desiredHash {
-			if setErr := unstructured.SetNestedMap(created.Object, specToApply, "spec"); setErr != nil {
+			if setErr := setNestedMap(created.Object, specToApply, "spec"); setErr != nil {
 				return setErr
 			}
 		}
@@ -224,7 +232,7 @@ func revisionName(ksvcName, hash string) string {
 }
 
 func specHash(spec map[string]any) (string, error) {
-	raw, err := json.Marshal(spec)
+	raw, err := marshalSpecJSON(spec)
 	if err != nil {
 		return "", fmt.Errorf("marshal spec for hash: %w", err)
 	}

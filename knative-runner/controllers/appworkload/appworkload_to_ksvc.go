@@ -53,6 +53,13 @@ var knativeReservedEnv = map[string]struct{}{
 	"K_SERVICE":       {},
 }
 
+// Overridable in tests to exercise error paths.
+var (
+	marshalJSON          = json.Marshal
+	unmarshalJSON        = json.Unmarshal
+	unstructuredFromJSON = (*unstructured.Unstructured).UnmarshalJSON
+)
+
 type AppWorkloadToKnativeServiceConverter struct {
 	scheme *runtime.Scheme
 }
@@ -62,6 +69,23 @@ func NewAppWorkloadToKnativeServiceConverter(scheme *runtime.Scheme) *AppWorkloa
 }
 
 func (r *AppWorkloadToKnativeServiceConverter) Convert(appWorkload *korifiv1alpha1.AppWorkload) (*unstructured.Unstructured, error) {
+	labels := korifiLabels(appWorkload)
+	specMap, err := marshaledPodSpec(appWorkload)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildKnativeService(
+		knativeServiceName(appWorkload),
+		appWorkload.Namespace,
+		labels,
+		serviceAnnotations(appWorkload),
+		templateAnnotations(appWorkload),
+		specMap,
+	)
+}
+
+func containerEnv(appWorkload *korifiv1alpha1.AppWorkload) []corev1.EnvVar {
 	envs := make([]corev1.EnvVar, 0, len(appWorkload.Spec.Env)+2)
 	for _, env := range appWorkload.Spec.Env {
 		if _, reserved := knativeReservedEnv[env.Name]; reserved {
@@ -82,13 +106,16 @@ func (r *AppWorkloadToKnativeServiceConverter) Convert(appWorkload *korifiv1alph
 	}
 
 	sort.SliceStable(envs, func(i, j int) bool { return envs[i].Name < envs[j].Name })
+	return envs
+}
 
-	container := corev1.Container{
+func userContainer(appWorkload *korifiv1alpha1.AppWorkload) corev1.Container {
+	return corev1.Container{
 		Name:            ApplicationContainerName,
 		Image:           appWorkload.Spec.Image,
 		ImagePullPolicy: corev1.PullAlways,
 		Command:         appWorkload.Spec.Command,
-		Env:             envs,
+		Env:             containerEnv(appWorkload),
 		Ports: slices.Collect(it.Map(slices.Values(appWorkload.Spec.Ports), func(port int32) corev1.ContainerPort {
 			// Knative allows empty, "h2c", or "http1" only.
 			return corev1.ContainerPort{Name: "http1", ContainerPort: port}
@@ -107,21 +134,36 @@ func (r *AppWorkloadToKnativeServiceConverter) Convert(appWorkload *korifiv1alph
 		Resources:     appWorkload.Spec.Resources,
 		StartupProbe:  appWorkload.Spec.StartupProbe,
 		LivenessProbe: appWorkload.Spec.LivenessProbe,
-		VolumeMounts: slices.Collect(it.Map(slices.Values(appWorkload.Spec.Services), func(s korifiv1alpha1.ServiceBinding) corev1.VolumeMount {
-			return corev1.VolumeMount{
-				Name:      s.Name,
-				ReadOnly:  true,
-				MountPath: filepath.Join(bindingRootPath, s.Name),
-			}
-		})),
+		VolumeMounts:  serviceVolumeMounts(appWorkload.Spec.Services),
 	}
+}
 
-	ksvcName, err := knativeServiceName(appWorkload)
-	if err != nil {
-		return nil, err
-	}
+func serviceVolumeMounts(services []korifiv1alpha1.ServiceBinding) []corev1.VolumeMount {
+	return slices.Collect(it.Map(slices.Values(services), func(s korifiv1alpha1.ServiceBinding) corev1.VolumeMount {
+		return corev1.VolumeMount{
+			Name:      s.Name,
+			ReadOnly:  true,
+			MountPath: filepath.Join(bindingRootPath, s.Name),
+		}
+	}))
+}
 
-	labels := map[string]string{
+func serviceVolumes(services []korifiv1alpha1.ServiceBinding) []corev1.Volume {
+	return slices.Collect(it.Map(slices.Values(services), func(s korifiv1alpha1.ServiceBinding) corev1.Volume {
+		return corev1.Volume{
+			Name: s.Name,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  s.Secret,
+					DefaultMode: tools.PtrTo[int32](0o644),
+				},
+			},
+		}
+	}))
+}
+
+func korifiLabels(appWorkload *korifiv1alpha1.AppWorkload) map[string]string {
+	return map[string]string{
 		controllers.LabelGUID: appWorkload.Spec.GUID,
 		LabelProcessType:      appWorkload.Spec.ProcessType,
 		LabelVersion:          appWorkload.Spec.Version,
@@ -131,69 +173,78 @@ func (r *AppWorkloadToKnativeServiceConverter) Convert(appWorkload *korifiv1alph
 		// StatefulSet-standard label. Knative pods don't get it automatically.
 		"apps.kubernetes.io/pod-index": "0",
 	}
+}
 
-	instances := max(appWorkload.Spec.Instances, 0)
-	// Desired count: min=max=N. Stopped (N=0): min 0, max 1 so the Service remains.
-	templateAnnotations := map[string]string{
+func processGUID(appWorkload *korifiv1alpha1.AppWorkload) string {
+	return fmt.Sprintf("%s-%s", appWorkload.Spec.GUID, appWorkload.Spec.Version)
+}
+
+func serviceAnnotations(appWorkload *korifiv1alpha1.AppWorkload) map[string]string {
+	return map[string]string{
 		AnnotationAppID:       appWorkload.Spec.AppGUID,
 		AnnotationVersion:     appWorkload.Spec.Version,
-		AnnotationProcessGUID: fmt.Sprintf("%s-%s", appWorkload.Spec.GUID, appWorkload.Spec.Version),
+		AnnotationProcessGUID: processGUID(appWorkload),
+	}
+}
+
+func templateAnnotations(appWorkload *korifiv1alpha1.AppWorkload) map[string]string {
+	instances := max(appWorkload.Spec.Instances, 0)
+	// Desired count: min=max=N. Stopped (N=0): min 0, max 1 so the Service remains.
+	return map[string]string{
+		AnnotationAppID:       appWorkload.Spec.AppGUID,
+		AnnotationVersion:     appWorkload.Spec.Version,
+		AnnotationProcessGUID: processGUID(appWorkload),
 		AnnotationMinScale:    strconv.FormatInt(int64(instances), 10),
 		AnnotationMaxScale:    strconv.FormatInt(int64(max(instances, 1)), 10),
 	}
+}
 
-	serviceAnnotations := map[string]string{
-		AnnotationAppID:       appWorkload.Spec.AppGUID,
-		AnnotationVersion:     appWorkload.Spec.Version,
-		AnnotationProcessGUID: fmt.Sprintf("%s-%s", appWorkload.Spec.GUID, appWorkload.Spec.Version),
-	}
-
-	podSpec := corev1.PodSpec{
-		Containers:                   []corev1.Container{container},
+func podSpec(appWorkload *korifiv1alpha1.AppWorkload) corev1.PodSpec {
+	return corev1.PodSpec{
+		Containers:                   []corev1.Container{userContainer(appWorkload)},
 		ImagePullSecrets:             appWorkload.Spec.ImagePullSecrets,
 		ServiceAccountName:           ServiceAccountName,
 		AutomountServiceAccountToken: tools.PtrTo(false),
 		// Knative forbids setting pod-level securityContext here.
-		Volumes: slices.Collect(it.Map(slices.Values(appWorkload.Spec.Services), func(s korifiv1alpha1.ServiceBinding) corev1.Volume {
-			return corev1.Volume{
-				Name: s.Name,
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName:  s.Secret,
-						DefaultMode: tools.PtrTo[int32](0o644),
-					},
-				},
-			}
-		})),
+		Volumes: serviceVolumes(appWorkload.Spec.Services),
 	}
+}
 
-	podSpecBytes, err := json.Marshal(podSpec)
+func marshaledPodSpec(appWorkload *korifiv1alpha1.AppWorkload) (map[string]any, error) {
+	bytes, err := marshalJSON(podSpec(appWorkload))
 	if err != nil {
 		return nil, fmt.Errorf("marshal pod spec: %w", err)
 	}
-	var podSpecMap map[string]any
-	if err = json.Unmarshal(podSpecBytes, &podSpecMap); err != nil {
+	var out map[string]any
+	if err = unmarshalJSON(bytes, &out); err != nil {
 		return nil, fmt.Errorf("unmarshal pod spec: %w", err)
 	}
 	// Drop null securityContext if present.
-	delete(podSpecMap, "securityContext")
+	delete(out, "securityContext")
+	return out, nil
+}
 
-	raw, err := json.Marshal(map[string]any{
+func buildKnativeService(
+	name, namespace string,
+	labels, serviceAnns, templateAnns map[string]string,
+	spec map[string]any,
+) (*unstructured.Unstructured, error) {
+	raw, err := marshalJSON(map[string]any{
 		"apiVersion": "serving.knative.dev/v1",
 		"kind":       "Service",
 		"metadata": metav1.ObjectMeta{
-			Name:        ksvcName,
-			Namespace:   appWorkload.Namespace,
+			Name:        name,
+			Namespace:   namespace,
 			Labels:      labels,
-			Annotations: serviceAnnotations,
+			Annotations: serviceAnns,
 		},
 		"spec": map[string]any{
 			"template": map[string]any{
 				"metadata": map[string]any{
 					"labels":      labels,
-					"annotations": templateAnnotations,
+					"annotations": templateAnns,
 				},
-				"spec": podSpecMap,
+				"spec": spec,
 			},
 		},
 	})
@@ -202,25 +253,22 @@ func (r *AppWorkloadToKnativeServiceConverter) Convert(appWorkload *korifiv1alph
 	}
 
 	out := &unstructured.Unstructured{}
-	if err := out.UnmarshalJSON(raw); err != nil {
+	if err := unstructuredFromJSON(out, raw); err != nil {
 		return nil, fmt.Errorf("unmarshal knative service: %w", err)
 	}
 	return out, nil
 }
 
-func knativeServiceName(appWorkload *korifiv1alpha1.AppWorkload) (string, error) {
+func knativeServiceName(appWorkload *korifiv1alpha1.AppWorkload) string {
 	lastStopAppRev := appWorkload.Spec.Version
 	if annotationVal, ok := appWorkload.Annotations[korifiv1alpha1.CFAppLastStopRevisionKey]; ok {
 		lastStopAppRev = annotationVal
 	}
-	nameSuffix, err := hash(fmt.Sprintf("%s-%s", appWorkload.Spec.GUID, lastStopAppRev))
-	if err != nil {
-		return "", fmt.Errorf("failed to generate hash for knative service name: %w", err)
-	}
+	nameSuffix := hash(fmt.Sprintf("%s-%s", appWorkload.Spec.GUID, lastStopAppRev))
 
 	// DNS-1035: must start with a letter. GUID-based prefixes often start with a digit.
 	namePrefix := sanitizeName("kw-"+appWorkload.Spec.AppGUID, "kw-"+appWorkload.Spec.GUID)
-	return fmt.Sprintf("%s-%s", namePrefix, nameSuffix), nil
+	return fmt.Sprintf("%s-%s", namePrefix, nameSuffix)
 }
 
 func sanitizeName(name, fallback string) string {
@@ -240,11 +288,8 @@ func truncateString(str string, num int) string {
 	return str
 }
 
-func hash(s string) (string, error) {
+func hash(s string) string {
 	const MaxHashLength = 10
-	sha := sha256.New()
-	if _, err := sha.Write([]byte(s)); err != nil {
-		return "", fmt.Errorf("failed to calculate sha: %w", err)
-	}
-	return hex.EncodeToString(sha.Sum(nil))[:MaxHashLength], nil
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])[:MaxHashLength]
 }
