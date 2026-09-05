@@ -20,6 +20,8 @@ export const versions = {
 	openeverestChart: "1.16.2",
 	/** loft-sh/vcluster chart (UAA isolation on kind). */
 	vclusterChart: "0.36.1",
+	/** OpenSearch Kubernetes Operator Helm chart. */
+	opensearchOperatorChart: "2.8.1",
 	/** Official UAA image (cfidentity/uaa). */
 	uaaImage: "docker.io/cfidentity/uaa:v79.7.0",
 } as const;
