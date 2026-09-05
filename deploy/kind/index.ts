@@ -10,7 +10,9 @@
  *   KorifiRelease            in-tree Helm chart (knative-runner)
  *   KnativeServing           Operator Helm + KnativeServing CR (Kourier ClusterIP)
  *   ContourGateway           NodePort GatewayClass params
- *   ServiceBrokerServices    shared Postgres (broker-ready connection facts)
+ *   ServiceBrokerServices    shared backing stores (postgres, …)
+ *   KindOsbBrokerImage       docker build + kind load osb-service
+ *   OsbServiceBroker         HTTPS OSB broker + CFServiceBroker registration
  *
  * Usage:
  *   cd deploy/kind && bun install
@@ -22,12 +24,15 @@ import * as pulumi from "@pulumi/pulumi";
 import {
 	ContourGateway,
 	KindKorifiImages,
+	KindOsbBrokerImage,
 	KnativeServing,
 	KorifiDependencies,
 	KorifiNamespaces,
 	KorifiRelease,
 	LocalRegistry,
+	OsbServiceBroker,
 	ServiceBrokerServices,
+	osbServicePath,
 	kindGatewayPorts,
 	kindKpackBuilderRepository,
 	kindRegistryPrefix,
@@ -172,6 +177,31 @@ const brokerServices = new ServiceBrokerServices(
 	{ dependsOn: [korifi] },
 );
 
+const osbImage = new KindOsbBrokerImage(
+	"osb-broker-image",
+	{
+		clusterName,
+		sourcePath: osbServicePath(repoRoot),
+		dependsOn: [cluster],
+	},
+	{ dependsOn: [cluster] },
+);
+
+const osbBroker = new OsbServiceBroker(
+	"osb-service",
+	{
+		provider: cluster.provider,
+		image: osbImage.image,
+		imagePullPolicy: "Never",
+		backends: {
+			postgres: brokerServices.postgres,
+		},
+		rootNamespace: namespaces.rootName,
+		dependsOn: [korifi.release, osbImage.loaded],
+	},
+	{ dependsOn: [brokerServices, osbImage, korifi] },
+);
+
 export const kubeconfig = kubeconfigPath;
 export const cfApiUrl = `https://${apiUrl}`;
 export const appsDomain = `*.${appDomain}`;
@@ -193,3 +223,8 @@ export const postgres = brokerServices.postgres
 			adminUrl: pulumi.secret(brokerServices.postgres.adminUrl!),
 		}
 	: undefined;
+
+export const osbBrokerUrl = osbBroker.url;
+export const osbServiceImage = osbImage.image;
+export const marketplaceHint =
+	"cf enable-service-access postgres && cf marketplace && cf create-service postgres shared mydb";

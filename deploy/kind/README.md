@@ -14,8 +14,13 @@ apps/kpack only.
 
 Reusable pieces live in [`../lib`](../lib) (`KorifiDependencies`,
 `LocalRegistry`, `KorifiRelease`, `ContourGateway`, `ServiceBrokerServices`,
-…) and are unit-tested there. After `pulumi up`, stack outputs include
-`postgres` admin connection facts for a follow-on OSB broker.
+`KindOsbBrokerImage`, `OsbServiceBroker`, …) and are unit-tested there.
+
+After `pulumi up` the stack builds [`osb-service/`](../../osb-service),
+`kind load`s it, deploys it over HTTPS (cert-manager self-signed; Korifi
+`trustInsecureBrokers` skips verify), and registers a `CFServiceBroker`.
+Postgres also serves TLS (`sslmode=require`). Stack outputs include
+`postgres` admin facts, `osbBrokerUrl`, and `marketplaceHint`.
 
 ## Quick start
 
@@ -36,6 +41,8 @@ Afterwards:
 pulumi stack output
 cf api https://localhost --skip-ssl-validation
 cf auth kubernetes-admin   # or the username from stack config adminUserName
+cf enable-service-access postgres
+cf marketplace
 ```
 
 ## Configuration

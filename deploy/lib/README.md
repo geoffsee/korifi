@@ -15,8 +15,10 @@ Reusable Pulumi components and pure helpers for installing Korifi.
 | `contour-gateway.ts` | GatewayClass (+ NodePort params on kind) |
 | `knative.ts` | Knative Operator Helm + `KnativeServing` CR (Kourier ClusterIP) |
 | `kind-images.ts` | Build Korifi images from the checkout and `kind load` them |
+| `kind-osb-broker-image.ts` | Build the in-tree `osb-service` image and `kind load` it |
 | `ecr-kpack-irsa.ts` | Annotate kpack controller SA for ECR |
 | `service-broker-services.ts` | Shared Postgres (etc.) for OSB brokers — enable flags per service |
+| `osb-service-broker.ts` | Deploy `osb-service` over HTTPS and register `CFServiceBroker` |
 | `custom-broker-service.example.ts` | Copy-paste template for adding a custom broker backend |
 
 Stacks under `deploy/{kind,eks,gke}` compose these components; they do not

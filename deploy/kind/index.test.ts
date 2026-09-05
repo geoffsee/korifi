@@ -24,6 +24,13 @@ test("kind stack composes shared lib components", () => {
 	expect(all).toContain("LocalRegistry");
 	expect(all).toContain("ContourGateway");
 	expect(all).toContain("ServiceBrokerServices");
+	expect(all).toContain("KindOsbBrokerImage");
+	expect(all).toContain("OsbServiceBroker");
+	expect(all).toContain("osbServicePath");
+	expect(all).toContain("osb-service");
+	expect(all).not.toContain("PostgresServiceBroker");
+	expect(all).not.toContain("--insecure");
+	expect(all).not.toContain('sslMode: "disable"');
 	expect(all).toContain('platform: "kind"');
 	expect(all).toContain("insecureTlsMetricsServer: true");
 	expect(all).toContain("NodePortService");
