@@ -26,12 +26,16 @@ type vclusterClient struct {
 }
 
 func newVClusterClient(o Options) (*vclusterClient, error) {
-	if o.EverestKubeconfig == "" {
+	return kubeconfigClient(o.EverestKubeconfig, o.EverestNamespace, o.EverestHostNamespace, o.EverestVClusterName)
+}
+
+func kubeconfigClient(kubeconfig, namespace, hostNS, vclusterName string) (*vclusterClient, error) {
+	if kubeconfig == "" {
 		return nil, nil
 	}
-	cfg, err := clientcmd.BuildConfigFromFlags("", o.EverestKubeconfig)
+	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		return nil, fmt.Errorf("everest kubeconfig: %w", err)
+		return nil, fmt.Errorf("kubeconfig: %w", err)
 	}
 	dyn, err := dynamic.NewForConfig(cfg)
 	if err != nil {
@@ -44,9 +48,9 @@ func newVClusterClient(o Options) (*vclusterClient, error) {
 	return &vclusterClient{
 		dyn:          dyn,
 		core:         core,
-		namespace:    o.EverestNamespace,
-		hostNS:       o.EverestHostNamespace,
-		vclusterName: o.EverestVClusterName,
+		namespace:    namespace,
+		hostNS:       hostNS,
+		vclusterName: vclusterName,
 	}, nil
 }
 

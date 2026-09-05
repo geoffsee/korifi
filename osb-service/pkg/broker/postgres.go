@@ -40,6 +40,10 @@ func newDefaultOfferings(o Options) (store, []Offering, error) {
 	if everest != nil {
 		vc = everest.vclusterClient
 	}
+	aigw, err := kubeconfigClient(o.AIGatewayKubeconfig, o.AIGatewayNamespace, o.AIGatewayHostNamespace, o.AIGatewayVClusterName)
+	if err != nil {
+		return nil, nil, err
+	}
 	return st, []Offering{
 		newPostgresOffering(o, everest),
 		newMySQLOffering(o, everest),
@@ -48,6 +52,7 @@ func newDefaultOfferings(o Options) (store, []Offering, error) {
 		newNATSOffering(o, vc),
 		newOpenSearchOffering(o, vc),
 		newRedisOffering(o, vc),
+		newAIGatewayOffering(o, aigw),
 	}, nil
 }
 
