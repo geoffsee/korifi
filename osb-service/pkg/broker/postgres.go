@@ -47,6 +47,7 @@ func newDefaultOfferings(o Options) (store, []Offering, error) {
 		newOzoneOffering(o, vc),
 		newNATSOffering(o, vc),
 		newOpenSearchOffering(o, vc),
+		newRedisOffering(o, vc),
 	}, nil
 }
 
