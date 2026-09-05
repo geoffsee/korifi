@@ -22,8 +22,8 @@ export const versions = {
 	victoriaMetricsOperatorCrdsChart: "0.0.1",
 	/** loft-sh/vcluster chart (UAA isolation on kind). */
 	vclusterChart: "0.36.1",
-	/** OpenSearch Kubernetes Operator Helm chart. */
-	opensearchOperatorChart: "2.8.1",
+	/** Last chart compatible with the published 2.8.0 operator image. */
+	opensearchOperatorChart: "2.8.0",
 	/** Official UAA image (cfidentity/uaa). */
 	uaaImage: "docker.io/cfidentity/uaa:v79.7.0",
 } as const;
