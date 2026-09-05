@@ -80,3 +80,12 @@ test("auth flow uses cf login against UAA", () => {
 	expect(all).toContain("adminEmail");
 	expect(all).not.toContain("cf auth kubernetes-admin");
 });
+
+test("AI Gateway backend routes and credentials use separate config", () => {
+	expect(all).toContain('getObject<AIGatewayBackendConfig[]>("aiGatewayBackends")');
+	expect(all).toContain('models: ["gpt-5.6-luna"]');
+	expect(all).toContain("`aiGatewayBackendApiKey-${backend.name}`");
+	expect(all).toContain("cfg.getSecret(secretKey)");
+	expect(all).not.toContain('cfg.get("aiGatewayApiKey")');
+	expect(all).not.toContain('cfg.get("aiGatewayBackendUrl")');
+});

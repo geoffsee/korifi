@@ -7,7 +7,7 @@ provisioned as Kubernetes resources in the same data-plane vcluster.
 OpenSearch clusters are provisioned via the OpenSearch operator. Dedicated
 Redis servers are provisioned as Kubernetes resources in the same vcluster.
 `aigateway` binds a tenant API key on the platform Envoy AI Gateway
-(vLLM backends are shared; models are listed at `GET /v1/models`).
+and forwards requests to the platform-configured OpenAI-compatible backend.
 Add another file next to `pkg/broker/postgres.go` that implements `Offering`
 and register it in `newDefaultOfferings`.
 

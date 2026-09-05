@@ -35,7 +35,7 @@ func (p *aiGatewayOffering) Catalog() Service {
 		Metadata: map[string]any{
 			"displayName":         "AI Gateway",
 			"providerDisplayName": "osb-service",
-			"longDescription":     "Binds a tenant API key on the platform Envoy AI Gateway. Models are listed at GET /v1/models; vLLM is a backend, not the binding.",
+			"longDescription":     "Binds a tenant API key on the platform Envoy AI Gateway, which forwards to a configured OpenAI-compatible backend.",
 		},
 		Plans: []Plan{{
 			Name:        "dedicated",

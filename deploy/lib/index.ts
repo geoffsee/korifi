@@ -55,7 +55,10 @@ export {
 } from "./everest-vcluster";
 export {
 	AIGatewayVcluster,
+	buildAIGatewayRouteRules,
 	kindAIGatewayVclusterLocalApiPort,
+	validateAIGatewayBackends,
+	type AIGatewayBackend,
 	type AIGatewayVclusterArgs,
 } from "./aigateway-vcluster";
 export {

@@ -5,12 +5,15 @@
  * PostgreSQL, PXC, and PSMDB operators; osb-service creates one
  * DatabaseCluster per CF service instance.
  *
- * Envoy AI Gateway (separate vcluster) hosts a shared model fleet; osb-service
- * issues one tenant API key per CF service instance.
+ * Envoy AI Gateway (separate vcluster) routes configured models to external
+ * backends; osb-service issues one tenant API key per CF service instance.
  */
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
-import { AIGatewayVcluster } from "./aigateway-vcluster";
+import {
+	AIGatewayVcluster,
+	type AIGatewayBackend,
+} from "./aigateway-vcluster";
 import { EverestVcluster } from "./everest-vcluster";
 
 /** Generic connection facts for a custom broker backend. */
@@ -48,6 +51,8 @@ export interface ServiceBrokerServicesArgs {
 	provider: k8s.Provider;
 	/** Kind cluster name; used to reach the Everest vcluster API. */
 	kindClusterName: string;
+	/** External OpenAI-compatible backends and their model associations. */
+	aigatewayBackends?: AIGatewayBackend[];
 	enable?: {
 		postgres?: boolean;
 		aigateway?: boolean;
@@ -92,11 +97,17 @@ export class ServiceBrokerServices extends pulumi.ComponentResource {
 		}
 
 		if (enable.aigateway) {
+			if (!args.aigatewayBackends) {
+				throw new Error(
+					"aigatewayBackends is required when the AI Gateway is enabled",
+				);
+			}
 			const aigateway = new AIGatewayVcluster(
 				`${name}-aigateway`,
 				{
 					provider: args.provider,
 					kindClusterName: args.kindClusterName,
+					backends: args.aigatewayBackends,
 					dependsOn: args.dependsOn,
 				},
 				{ parent: this },

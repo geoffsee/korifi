@@ -49,6 +49,7 @@ import { KindCluster } from "./cluster";
 import { KindEverestOperatorBundles } from "./everest-operator-bundles";
 import {
 	adminEmail,
+	aiGatewayBackends,
 	apiUrl,
 	appDomain,
 	clusterName,
@@ -253,6 +254,7 @@ const brokerServices = new ServiceBrokerServices(
 	{
 		provider: cluster.provider,
 		kindClusterName: clusterName,
+		aigatewayBackends: aiGatewayBackends,
 		enable: { postgres: true, aigateway: true },
 		dependsOn: [korifi.release, everestOperatorBundles.loaded],
 	},

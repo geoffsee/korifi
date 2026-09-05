@@ -19,7 +19,7 @@ Reusable Pulumi components and pure helpers for installing Korifi.
 | `kind-osb-broker-image.ts` | Build the in-tree `osb-service` image and `kind load` it |
 | `ecr-kpack-irsa.ts` | Annotate kpack controller SA for ECR |
 | `everest-vcluster.ts` | OpenEverest + OpenSearch operator in a vcluster (OSB creates clusters) |
-| `aigateway-vcluster.ts` | Envoy AI Gateway + vLLM fleet in a vcluster (OSB issues tenant API keys) |
+| `aigateway-vcluster.ts` | Envoy AI Gateway + external OpenAI-compatible backend (OSB issues tenant API keys) |
 | `service-broker-services.ts` | Everest/AI Gateway kubeconfig/namespace facts the OSB broker consumes |
 | `osb-service-broker.ts` | Deploy `osb-service` over HTTPS and register `CFServiceBroker` |
 | `uaa-certs.ts` | TLS CA + server PEMs for kind OIDC mount and UAA proxy |

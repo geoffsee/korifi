@@ -7,8 +7,8 @@
  * Backing stores come from ServiceBrokerServices via `backends`. Everest
  * backs postgres, mysql, and mongodb dedicated clusters. Apache Ozone,
  * NATS, OpenSearch, and Redis dedicated instances are created in the same vcluster.
- * Envoy AI Gateway (separate vcluster) is a shared model fleet; OSB issues
- * tenant API keys.
+ * Envoy AI Gateway runs in a separate vcluster and forwards to a configured
+ * external OpenAI-compatible backend; OSB issues tenant API keys.
  *
  * Plans default to admin visibility; `cf enable-service-access postgres`
  * (and `mysql`, `mongodb`, `ozone`, `nats`, `opensearch`, `redis`, `aigateway`) after install.

@@ -1,6 +1,6 @@
 /**
- * Envoy Gateway + Envoy AI Gateway in a vcluster, plus a shared vLLM model
- * fleet. OSB does not create models; it issues one tenant API key per CF
+ * Envoy Gateway + Envoy AI Gateway in a vcluster, routing configured models to
+ * external OpenAI-compatible backends. OSB issues one tenant API key per CF
  * service instance against the shared Gateway.
  *
  * Port-forward pattern matches EverestVcluster; API listen port is distinct.
@@ -17,15 +17,125 @@ import { versions } from "./versions";
 /** Host port for `kubectl port-forward` to the AI Gateway vcluster API. */
 export const kindAIGatewayVclusterLocalApiPort = 18445 as const;
 
-const models = [
-	{ id: "opt-125m", hf: "facebook/opt-125m" },
-	{ id: "tiny-gpt2", hf: "sshleifer/tiny-gpt2" },
-] as const;
+export interface AIGatewayBackend {
+	/** DNS-1123 name used for this backend's Kubernetes resources. */
+	name: string;
+	/** Base URL of an OpenAI-compatible endpoint, for example https://api.openai.com. */
+	url: string;
+	/** Model names routed to this backend. A model may belong to only one backend. */
+	models: string[];
+	/** Optional API key forwarded to the external backend. */
+	apiKey?: pulumi.Input<string>;
+}
 
 export interface AIGatewayVclusterArgs {
 	provider: k8s.Provider;
 	kindClusterName: string;
+	backends: AIGatewayBackend[];
 	dependsOn?: pulumi.Input<pulumi.Resource>[];
+}
+
+export function validateAIGatewayBackends(
+	backends: readonly AIGatewayBackend[],
+): void {
+	if (!Array.isArray(backends) || backends.length === 0) {
+		throw new Error("at least one AI Gateway backend is required");
+	}
+
+	const backendNames = new Set<string>();
+	const modelOwners = new Map<string, string>();
+	for (const [index, backend] of backends.entries()) {
+		if (!backend || typeof backend !== "object") {
+			throw new Error(`AI Gateway backend at index ${index} must be an object`);
+		}
+		if (
+			typeof backend.name !== "string" ||
+			backend.name.length > 63 ||
+			!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(backend.name)
+		) {
+			throw new Error(
+				`AI Gateway backend at index ${index} must have a valid DNS-1123 name`,
+			);
+		}
+		if (backendNames.has(backend.name)) {
+			throw new Error(`duplicate AI Gateway backend name: ${backend.name}`);
+		}
+		backendNames.add(backend.name);
+
+		let url: URL;
+		try {
+			url = new URL(backend.url);
+		} catch {
+			throw new Error(
+				`AI Gateway backend ${backend.name} URL must be a valid http or https origin`,
+			);
+		}
+		if (url.protocol !== "https:" && url.protocol !== "http:") {
+			throw new Error(
+				`AI Gateway backend ${backend.name} URL must use http or https`,
+			);
+		}
+		if (
+			!url.hostname ||
+			url.username ||
+			url.password ||
+			url.pathname !== "/" ||
+			url.search ||
+			url.hash
+		) {
+			throw new Error(
+				`AI Gateway backend ${backend.name} URL must be an origin without a path`,
+			);
+		}
+
+		if (!Array.isArray(backend.models) || backend.models.length === 0) {
+			throw new Error(
+				`AI Gateway backend ${backend.name} must declare at least one model`,
+			);
+		}
+		for (const model of backend.models) {
+			if (
+				typeof model !== "string" ||
+				model.length === 0 ||
+				model.trim() !== model ||
+				/[\r\n]/.test(model)
+			) {
+				throw new Error(
+					`AI Gateway backend ${backend.name} contains an invalid model name`,
+				);
+			}
+			const owner = modelOwners.get(model);
+			if (owner) {
+				throw new Error(
+					`AI Gateway model ${model} is assigned to both ${owner} and ${backend.name}`,
+				);
+			}
+			modelOwners.set(model, backend.name);
+		}
+	}
+}
+
+export function buildAIGatewayRouteRules(
+	backends: readonly AIGatewayBackend[],
+): Array<Record<string, unknown>> {
+	validateAIGatewayBackends(backends);
+	return backends.flatMap((backend) =>
+		backend.models.map((model) => ({
+			matches: [
+				{
+					headers: [
+						{
+							type: "Exact",
+							name: "x-ai-eg-model",
+							value: model,
+						},
+					],
+				},
+			],
+			backendRefs: [{ name: backend.name }],
+			modelsOwnedBy: backend.name,
+		})),
+	);
 }
 
 export class AIGatewayVcluster extends pulumi.ComponentResource {
@@ -132,6 +242,23 @@ fi
 			},
 			{ parent: this, dependsOn: [vclusterRelease] },
 		);
+		// Command resources only run when their inputs change. Re-check the
+		// process on every preview/update so a canceled Pulumi process or host
+		// restart cannot leave the virtual provider pointed at a dead forward.
+		const apiForwardReady = command.local.runOutput(
+			{
+				command: aigwVclusterForwardScript({
+					hostKubeconfig,
+					namespace: this.namespace,
+					svc: vclusterName,
+					pidFile: pfPidFile,
+					logFile: pfLogFile,
+					port: apiPort,
+					mode: "update",
+				}),
+			},
+			{ parent: this, dependsOn: [apiForward] },
+		);
 
 		const kubeconfigCmd = new command.local.Command(
 			`${name}-kubeconfig`,
@@ -160,12 +287,14 @@ exit 1
 			},
 		);
 
-		const pulumiKubeconfig = kubeconfigCmd.stdout.apply((raw) =>
-			raw.replace(
+		const pulumiKubeconfig = pulumi
+			.all([kubeconfigCmd.stdout, apiForwardReady.stdout])
+			.apply(([raw]) =>
+				raw.replace(
 				/server:\s*https?:\/\/[^\s]+/,
 				`server: https://127.0.0.1:${apiPort}`,
-			),
-		);
+				),
+			);
 		this.inClusterKubeconfig = kubeconfigCmd.stdout.apply((raw) =>
 			raw.replace(
 				/server:\s*https?:\/\/[^\s]+/,
@@ -200,8 +329,7 @@ exit 1
 					config: {
 						envoyGateway: {
 							gateway: {
-								controllerName:
-									"gateway.envoyproxy.io/gatewayclass-controller",
+								controllerName: "gateway.envoyproxy.io/gatewayclass-controller",
 							},
 							logging: { level: { default: "info" } },
 							provider: { type: "Kubernetes" },
@@ -295,15 +423,6 @@ exit 1
 			},
 			{ parent: this },
 		);
-		const caConfig = new k8s.core.v1.ConfigMap(
-			`${name}-ca`,
-			{
-				metadata: { name: "aigw-ca", namespace: gwNs },
-				data: { "ca.crt": caCert.certPem },
-			},
-			{ ...virtualOpts, dependsOn: [appNs] },
-		);
-
 		const gatewayDns = [
 			"aigw",
 			`aigw.${gwNs}`,
@@ -346,22 +465,17 @@ exit 1
 			{ ...virtualOpts, dependsOn: [appNs] },
 		);
 
-		const routeRules: pulumi.Input<unknown>[] = [];
-		const modelResources: pulumi.Resource[] = [];
-		for (const model of models) {
-			const created = this.installModel({
+		const routeRules: pulumi.Input<unknown>[] =
+			buildAIGatewayRouteRules(args.backends);
+		const externalBackends = args.backends.map((backend) =>
+			this.installExternalBackend({
 				name,
-				model,
+				backend,
 				gwNs,
 				virtualOpts,
 				appNs,
-				caKeyPem: caKey.privateKeyPem,
-				caCertPem: caCert.certPem,
-				caConfig,
-			});
-			modelResources.push(...created.resources);
-			routeRules.push(created.rule);
-		}
+			}),
+		);
 
 		const gatewayClass = new k8s.apiextensions.CustomResource(
 			`${name}-gatewayclass`,
@@ -496,13 +610,16 @@ exit 1
 							group: "gateway.networking.k8s.io",
 						},
 					],
-					schema: { name: "OpenAI", version: "v1" },
 					rules: routeRules,
 				},
 			},
 			{
 				...virtualOpts,
-				dependsOn: [gateway, aiGateway, ...modelResources],
+				dependsOn: [
+					gateway,
+					aiGateway,
+					...externalBackends.flatMap((backend) => backend.resources),
+				],
 			},
 		);
 
@@ -515,153 +632,23 @@ exit 1
 		});
 	}
 
-	private installModel(args: {
+	private installExternalBackend(args: {
 		name: string;
-		model: (typeof models)[number];
+		backend: AIGatewayBackend;
 		gwNs: string;
 		virtualOpts: pulumi.CustomResourceOptions;
 		appNs: pulumi.Resource;
-		caKeyPem: pulumi.Input<string>;
-		caCertPem: pulumi.Input<string>;
-		caConfig: k8s.core.v1.ConfigMap;
-	}): { resources: pulumi.Resource[]; rule: Record<string, unknown> } {
-		const { name, model, gwNs, virtualOpts, appNs, caKeyPem, caCertPem, caConfig } =
-			args;
-		const resName = `vllm-${model.id}`;
-		const dns = [
-			resName,
-			`${resName}.${gwNs}`,
-			`${resName}.${gwNs}.svc`,
-			`${resName}.${gwNs}.svc.cluster.local`,
-		];
-		const material = signedCert(
-			this,
-			`${name}-${model.id}`,
-			resName,
-			dns,
-			caKeyPem,
-			caCertPem,
-		);
-		const tlsSecret = new k8s.core.v1.Secret(
-			`${name}-${model.id}-tls`,
-			{
-				metadata: { name: `${resName}-tls`, namespace: gwNs },
-				type: "kubernetes.io/tls",
-				stringData: {
-					"tls.crt": material.certPem,
-					"tls.key": material.keyPem,
-					"ca.crt": caCertPem,
-				},
-			},
-			{ ...virtualOpts, dependsOn: [appNs] },
-		);
-		const apiKey = new random.RandomPassword(
-			`${name}-${model.id}-key`,
-			{ length: 32, special: false },
-			{ parent: this },
-		);
-		const authSecret = new k8s.core.v1.Secret(
-			`${name}-${model.id}-auth`,
-			{
-				metadata: { name: `${resName}-auth`, namespace: gwNs },
-				stringData: { apiKey: apiKey.result },
-			},
-			{ ...virtualOpts, dependsOn: [appNs] },
-		);
-		const labels = { app: resName, "osb.korifi/offering": "aigateway" };
-		const deploy = new k8s.apps.v1.Deployment(
-			`${name}-${model.id}-deploy`,
-			{
-				metadata: { name: resName, namespace: gwNs, labels },
-				spec: {
-					replicas: 1,
-					selector: { matchLabels: { app: resName } },
-					template: {
-						metadata: { labels },
-						spec: {
-							containers: [
-								{
-									name: "vllm",
-									image: versions.vllmImage,
-									imagePullPolicy: "IfNotPresent",
-									command: ["vllm"],
-									args: [
-										"serve",
-										model.hf,
-										"--host",
-										"0.0.0.0",
-										"--port",
-										"8000",
-										"--served-model-name",
-										model.id,
-										"--ssl-certfile",
-										"/tls/tls.crt",
-										"--ssl-keyfile",
-										"/tls/tls.key",
-										"--device",
-										"cpu",
-										"--dtype",
-										"float32",
-										"--max-model-len",
-										"256",
-									],
-									env: [
-										{
-											name: "VLLM_API_KEY",
-											valueFrom: {
-												secretKeyRef: {
-													name: `${resName}-auth`,
-													key: "apiKey",
-												},
-											},
-										},
-									],
-									ports: [{ containerPort: 8000, name: "https" }],
-									resources: {
-										requests: { cpu: "250m", memory: "2Gi" },
-									},
-									volumeMounts: [
-										{ name: "tls", mountPath: "/tls", readOnly: true },
-										{ name: "cache", mountPath: "/root/.cache/huggingface" },
-									],
-									livenessProbe: {
-										tcpSocket: { port: 8000 },
-										initialDelaySeconds: 60,
-										periodSeconds: 20,
-									},
-									readinessProbe: {
-										tcpSocket: { port: 8000 },
-										initialDelaySeconds: 30,
-										periodSeconds: 10,
-									},
-								},
-							],
-							volumes: [
-								{
-									name: "tls",
-									secret: { secretName: `${resName}-tls` },
-								},
-								{ name: "cache", emptyDir: {} },
-							],
-						},
-					},
-				},
-			},
-			{ ...virtualOpts, dependsOn: [appNs, tlsSecret, authSecret] },
-		);
-		const svc = new k8s.core.v1.Service(
-			`${name}-${model.id}-svc`,
-			{
-				metadata: { name: resName, namespace: gwNs, labels },
-				spec: {
-					selector: { app: resName },
-					ports: [{ name: "https", port: 8000, targetPort: 8000 }],
-				},
-			},
-			{ ...virtualOpts, dependsOn: [deploy] },
-		);
+	}): { resources: pulumi.Resource[] } {
+		const { name, backend: external, gwNs, virtualOpts, appNs } = args;
+		const url = new URL(external.url);
+		const port = url.port
+			? Number(url.port)
+			: url.protocol === "https:"
+				? 443
+				: 80;
+		const resName = external.name;
 		const backend = new k8s.apiextensions.CustomResource(
-			`${name}-${model.id}-backend`,
+			`${name}-${resName}-backend`,
 			{
 				apiVersion: "gateway.envoyproxy.io/v1alpha1",
 				kind: "Backend",
@@ -669,48 +656,40 @@ exit 1
 				spec: {
 					endpoints: [
 						{
-							fqdn: {
-								hostname: `${resName}.${gwNs}.svc.cluster.local`,
-								port: 8000,
+							fqdn: { hostname: url.hostname, port },
+						},
+					],
+				},
+			},
+			{ ...virtualOpts, dependsOn: [appNs] },
+		);
+		const backendTLS =
+			url.protocol === "https:"
+				? new k8s.apiextensions.CustomResource(
+						`${name}-${resName}-backend-tls`,
+						{
+							apiVersion: "gateway.networking.k8s.io/v1alpha3",
+							kind: "BackendTLSPolicy",
+							metadata: { name: `${resName}-tls`, namespace: gwNs },
+							spec: {
+								targetRefs: [
+									{
+										group: "gateway.envoyproxy.io",
+										kind: "Backend",
+										name: resName,
+									},
+								],
+								validation: {
+									wellKnownCACertificates: "System",
+									hostname: url.hostname,
+								},
 							},
 						},
-					],
-					tls: {
-						caCertificateRefs: [
-							{ group: "", kind: "ConfigMap", name: "aigw-ca" },
-						],
-					},
-				},
-			},
-			{ ...virtualOpts, dependsOn: [svc, caConfig] },
-		);
-		const backendTLS = new k8s.apiextensions.CustomResource(
-			`${name}-${model.id}-backend-tls`,
-			{
-				apiVersion: "gateway.networking.k8s.io/v1alpha3",
-				kind: "BackendTLSPolicy",
-				metadata: { name: `${resName}-tls`, namespace: gwNs },
-				spec: {
-					targetRefs: [
-						{
-							group: "gateway.envoyproxy.io",
-							kind: "Backend",
-							name: resName,
-							sectionName: "8000",
-						},
-					],
-					validation: {
-						caCertificateRefs: [
-							{ group: "", kind: "ConfigMap", name: "aigw-ca" },
-						],
-						hostname: `${resName}.${gwNs}.svc.cluster.local`,
-					},
-				},
-			},
-			{ ...virtualOpts, dependsOn: [backend, caConfig] },
-		);
+						{ ...virtualOpts, dependsOn: [backend] },
+					)
+				: undefined;
 		const aiBackend = new k8s.apiextensions.CustomResource(
-			`${name}-${model.id}-aibackend`,
+			`${name}-${resName}-aibackend`,
 			{
 				apiVersion: "aigateway.envoyproxy.io/v1beta1",
 				kind: "AIServiceBackend",
@@ -726,55 +705,45 @@ exit 1
 			},
 			{ ...virtualOpts, dependsOn: [backend] },
 		);
-		const backendAuth = new k8s.apiextensions.CustomResource(
-			`${name}-${model.id}-backend-auth`,
-			{
-				apiVersion: "aigateway.envoyproxy.io/v1beta1",
-				kind: "BackendSecurityPolicy",
-				metadata: { name: `${resName}-auth`, namespace: gwNs },
-				spec: {
-					targetRefs: [
-						{
-							group: "aigateway.envoyproxy.io",
-							kind: "AIServiceBackend",
-							name: resName,
-						},
-					],
-					type: "APIKey",
-					apiKey: {
-						secretRef: { name: `${resName}-auth`, namespace: gwNs },
-					},
-				},
-			},
-			{ ...virtualOpts, dependsOn: [aiBackend, authSecret] },
-		);
-		return {
-			resources: [
-				tlsSecret,
-				authSecret,
-				deploy,
-				svc,
-				backend,
-				backendTLS,
-				aiBackend,
-				backendAuth,
-			],
-			rule: {
-				matches: [
+		const apiKeySecret = external.apiKey
+			? new k8s.core.v1.Secret(
+					`${name}-${resName}-backend-key`,
 					{
-						headers: [
-							{
-								type: "Exact",
-								name: "x-ai-eg-model",
-								value: model.id,
-							},
-						],
+						metadata: { name: `${resName}-auth`, namespace: gwNs },
+						stringData: { apiKey: external.apiKey },
 					},
-				],
-				modelsOwnedBy: "osb-service",
-				backendRefs: [{ name: resName }],
-			},
-		};
+					{ ...virtualOpts, dependsOn: [appNs] },
+				)
+			: undefined;
+		const backendAuth = external.apiKey
+			? new k8s.apiextensions.CustomResource(
+					`${name}-${resName}-backend-auth`,
+					{
+						apiVersion: "aigateway.envoyproxy.io/v1beta1",
+						kind: "BackendSecurityPolicy",
+						metadata: { name: `${resName}-auth`, namespace: gwNs },
+						spec: {
+							targetRefs: [
+								{
+									group: "aigateway.envoyproxy.io",
+									kind: "AIServiceBackend",
+									name: resName,
+								},
+							],
+							type: "APIKey",
+							apiKey: {
+								secretRef: { name: `${resName}-auth`, namespace: gwNs },
+							},
+						},
+					},
+					{ ...virtualOpts, dependsOn: [aiBackend, apiKeySecret!] },
+				)
+			: undefined;
+		const resources: pulumi.Resource[] = [backend, aiBackend];
+		if (backendTLS) resources.push(backendTLS);
+		if (apiKeySecret) resources.push(apiKeySecret);
+		if (backendAuth) resources.push(backendAuth);
+		return { resources };
 	}
 }
 
