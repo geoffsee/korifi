@@ -21,8 +21,8 @@ After `pulumi up` the stack builds [`osb-service/`](../../osb-service),
 `kind load`s it, deploys it over HTTPS (cert-manager self-signed; Korifi
 `trustInsecureBrokers` skips verify), and registers a `CFServiceBroker`.
 OpenEverest runs in a vcluster; `cf create-service postgres dedicated`
-creates one DatabaseCluster per instance. Stack outputs include
-`postgres` admin facts, `osbBrokerUrl`, and `marketplaceHint`.
+(or `mysql` / `mongodb`) creates one DatabaseCluster per instance. Stack
+outputs include `everest`, `osbBrokerUrl`, and `marketplaceHint`.
 
 ## Quick start
 
@@ -45,6 +45,8 @@ cf api https://localhost --skip-ssl-validation
 cf login -u "$(pulumi stack output uaaAdminEmail)" \
   -p "$(pulumi stack output uaaAdminPassword --show-secrets)"
 cf enable-service-access postgres
+cf enable-service-access mysql
+cf enable-service-access mongodb
 cf marketplace
 ```
 

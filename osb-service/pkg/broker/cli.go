@@ -35,7 +35,7 @@ func AddFlags(o *Options) {
 	flag.StringVar(&o.PostgresPassword, "postgres-password", os.Getenv("POSTGRES_PASSWORD"), "Postgres admin password (prefer POSTGRES_PASSWORD)")
 	flag.StringVar(&o.PostgresDB, "postgres-db", envDefault("POSTGRES_DB", "postgres"), "Postgres maintenance database")
 	flag.StringVar(&o.PostgresSSLMode, "postgres-sslmode", envDefault("POSTGRES_SSLMODE", "require"), "libpq sslmode for the admin connection (default require; TLS required)")
-	flag.StringVar(&o.EverestKubeconfig, "everest-kubeconfig", envDefault("EVEREST_KUBECONFIG", ""), "kubeconfig for the OpenEverest vcluster (empty keeps fake/in-memory postgres provision)")
+	flag.StringVar(&o.EverestKubeconfig, "everest-kubeconfig", envDefault("EVEREST_KUBECONFIG", ""), "kubeconfig for the OpenEverest vcluster (empty keeps fake/in-memory provision)")
 	flag.StringVar(&o.EverestNamespace, "everest-namespace", envDefault("EVEREST_NAMESPACE", "everest"), "vcluster namespace for DatabaseClusters")
 	flag.StringVar(&o.EverestHostNamespace, "everest-host-namespace", envDefault("EVEREST_HOST_NAMESPACE", "everest-vcluster"), "host namespace where vcluster syncs Services")
 	flag.StringVar(&o.EverestVClusterName, "everest-vcluster-name", envDefault("EVEREST_VCLUSTER_NAME", "everest"), "vcluster name used in synced Service DNS")
