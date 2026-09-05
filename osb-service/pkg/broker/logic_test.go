@@ -33,10 +33,10 @@ func TestCatalogDedicatedEngines(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := b.Catalog()
-	if len(c.Services) != 5 {
+	if len(c.Services) != 6 {
 		t.Fatalf("unexpected catalog: %#v", c)
 	}
-	want := []string{"mongodb", "mysql", "nats", "ozone", "postgres"}
+	want := []string{"mongodb", "mysql", "nats", "opensearch", "ozone", "postgres"}
 	for i, name := range want {
 		if c.Services[i].Name != name || c.Services[i].Plans[0].Name != "dedicated" {
 			t.Fatalf("service %d: %#v", i, c.Services[i])
@@ -153,6 +153,34 @@ func TestBindOzoneCredentials(t *testing.T) {
 	endpoint, _ := resp.Credentials["endpoint"].(string)
 	if !strings.HasPrefix(endpoint, "https://") {
 		t.Fatalf("endpoint missing https: %s", endpoint)
+	}
+}
+
+func TestBindOpenSearchCredentials(t *testing.T) {
+	b, err := NewBusinessLogic(Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	_, status, err := b.Provision(id, ProvisionRequest{ServiceID: OpenSearchServiceID, PlanID: OpenSearchPlanID})
+	if err != nil || status != http.StatusCreated {
+		t.Fatalf("provision: %d %v", status, err)
+	}
+	resp, status, err := b.Bind(id, "bbbbbbbb-cccc-dddd-eeee-ffffffffffff", BindRequest{ServiceID: OpenSearchServiceID, PlanID: OpenSearchPlanID})
+	if err != nil || status != http.StatusCreated {
+		t.Fatalf("bind: %d %v", status, err)
+	}
+	for _, key := range []string{"uri", "jdbcUrl", "username", "password", "hostname"} {
+		if resp.Credentials[key] == nil || resp.Credentials[key] == "" {
+			t.Fatalf("missing credential %q: %#v", key, resp.Credentials)
+		}
+	}
+	if resp.Credentials["tls"] != true || resp.Credentials["use_ssl"] != true {
+		t.Fatalf("tls flags: %#v", resp.Credentials)
+	}
+	uri, _ := resp.Credentials["uri"].(string)
+	if !strings.HasPrefix(uri, "https://") {
+		t.Fatalf("uri missing https: %s", uri)
 	}
 }
 

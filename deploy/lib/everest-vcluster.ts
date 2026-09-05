@@ -268,7 +268,32 @@ exit 1
 			},
 		);
 
-		this.ready = everest;
+		const opensearchOperator = new k8s.helm.v3.Release(
+			`${name}-opensearch-operator`,
+			{
+				name: "opensearch-operator",
+				chart: "opensearch-operator",
+				version: versions.opensearchOperatorChart,
+				repositoryOpts: {
+					repo: "https://opensearch-project.github.io/opensearch-k8s-operator/",
+				},
+				namespace: "everest-system",
+				timeout: 900,
+				values: {
+					manager: {
+						watchNamespace: this.dbNamespace,
+					},
+					webhook: { enabled: false },
+				},
+			},
+			{
+				...virtualOpts,
+				dependsOn: [systemNs, everest],
+				customTimeouts: { create: "20m", update: "20m" },
+			},
+		);
+
+		this.ready = opensearchOperator;
 		this.registerOutputs({
 			namespace: this.namespace,
 			dbNamespace: this.dbNamespace,

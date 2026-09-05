@@ -53,6 +53,7 @@ func newDefaultOfferings(o Options) (store, []Offering, error) {
 		newMongoOffering(o, everest),
 		newOzoneOffering(o, vc),
 		newNATSOffering(o, vc),
+		newOpenSearchOffering(o, vc),
 	}, nil
 }
 
