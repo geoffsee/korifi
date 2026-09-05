@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -21,6 +22,34 @@ var databaseClusterGVR = schema.GroupVersionResource{
 	Version:  "v1alpha1",
 	Resource: "databaseclusters",
 }
+
+// everestEngine is one OpenEverest DatabaseCluster engine. Each OSB offering
+// provisions a dedicated cluster of this type — never a shared instance.
+type everestEngine struct {
+	Type        string
+	ProxyType   string
+	Version     string
+	DefaultPort int
+	// Service is the in-vcluster Service name suffix used when status.hostname
+	// is empty. Host DNS is rewritten to the vcluster-synced Service.
+	Service string
+	Prefix  string
+}
+
+var (
+	postgresEngine = everestEngine{
+		Type: "postgresql", ProxyType: "pgbouncer", Version: "17.10",
+		DefaultPort: 5432, Service: "primary", Prefix: "p",
+	}
+	mysqlEngine = everestEngine{
+		Type: "pxc", ProxyType: "haproxy", Version: "8.0.39-30.1",
+		DefaultPort: 3306, Service: "haproxy", Prefix: "x",
+	}
+	mongoEngine = everestEngine{
+		Type: "psmdb", Version: "8.0.12-4",
+		DefaultPort: 27017, Service: "rs0", Prefix: "m",
+	}
+)
 
 type everestClient struct {
 	dyn          dynamic.Interface
@@ -60,10 +89,29 @@ func (c *everestClient) healthy(ctx context.Context) error {
 	return err
 }
 
-func (c *everestClient) provision(ctx context.Context, instanceID string) (map[string]any, error) {
-	name, err := resourceName("p", instanceID)
+func (c *everestClient) provision(ctx context.Context, instanceID string, eng everestEngine) (map[string]any, error) {
+	name, err := resourceName(eng.Prefix, instanceID)
 	if err != nil {
 		return nil, err
+	}
+	engineSpec := map[string]any{
+		"type":     eng.Type,
+		"replicas": 1,
+		"storage":  map[string]any{"size": "2Gi"},
+		"resources": map[string]any{
+			"cpu":    "250m",
+			"memory": "512Mi",
+		},
+	}
+	if eng.Version != "" {
+		engineSpec["version"] = eng.Version
+	}
+	proxy := map[string]any{
+		"replicas": 1,
+		"expose":   map[string]any{"type": "ClusterIP"},
+	}
+	if eng.ProxyType != "" {
+		proxy["type"] = eng.ProxyType
 	}
 	obj := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "everest.percona.com/v1alpha1",
@@ -73,39 +121,27 @@ func (c *everestClient) provision(ctx context.Context, instanceID string) (map[s
 			"namespace": c.namespace,
 			"labels": map[string]any{
 				"osb.korifi/instance-id": instanceID,
+				"osb.korifi/engine":      eng.Type,
 			},
 		},
 		"spec": map[string]any{
 			"backup": map[string]any{"pitr": map[string]any{"enabled": false}},
-			"engine": map[string]any{
-				"type":     "postgresql",
-				"replicas": 1,
-				"version":  "17.10",
-				"storage":  map[string]any{"size": "2Gi"},
-				"resources": map[string]any{
-					"cpu":    "250m",
-					"memory": "512Mi",
-				},
-			},
-			"proxy": map[string]any{
-				"type":     "pgbouncer",
-				"replicas": 1,
-				"expose":   map[string]any{"type": "ClusterIP"},
-			},
+			"engine": engineSpec,
+			"proxy":  proxy,
 		},
 	}}
 	_, err = c.dyn.Resource(databaseClusterGVR).Namespace(c.namespace).Create(ctx, obj, metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return nil, fmt.Errorf("create DatabaseCluster: %w", err)
+		return nil, fmt.Errorf("create DatabaseCluster %s: %w", eng.Type, err)
 	}
 	if err := c.waitReady(ctx, name); err != nil {
 		return nil, err
 	}
-	secret, err := c.waitUserSecret(ctx, name)
+	secret, statusHost, statusPort, err := c.waitUserSecret(ctx, name)
 	if err != nil {
 		return nil, err
 	}
-	return c.credentialsFromSecret(name, secret), nil
+	return c.credentialsFromSecret(eng, name, secret, statusHost, statusPort), nil
 }
 
 func (c *everestClient) waitReady(ctx context.Context, name string) error {
@@ -140,26 +176,58 @@ func (c *everestClient) deprovision(ctx context.Context, name string) error {
 	return err
 }
 
-func (c *everestClient) waitUserSecret(ctx context.Context, name string) (*corev1.Secret, error) {
-	candidates := []string{name + "-pguser-" + name, "everest-secrets-" + name}
+func (c *everestClient) waitUserSecret(ctx context.Context, name string) (*corev1.Secret, string, int64, error) {
+	candidates := []string{
+		"everest-secrets-" + name,
+		name + "-pguser-" + name,
+		name + "-secrets",
+	}
 	deadline := time.Now().Add(10 * time.Minute)
 	for time.Now().Before(deadline) {
 		for _, secretName := range candidates {
 			sec, err := c.core.CoreV1().Secrets(c.namespace).Get(ctx, secretName, metav1.GetOptions{})
-			if err == nil && len(sec.Data["password"]) > 0 {
-				return sec, nil
+			if err == nil && secretHasPassword(sec) {
+				host, port := c.clusterEndpoint(ctx, name)
+				return sec, host, port, nil
 			}
 		}
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, "", 0, ctx.Err()
 		case <-time.After(5 * time.Second):
 		}
 	}
-	return nil, fmt.Errorf("timed out waiting for OpenEverest user secret for %s", name)
+	return nil, "", 0, fmt.Errorf("timed out waiting for OpenEverest user secret for %s", name)
 }
 
-func (c *everestClient) credentialsFromSecret(cluster string, sec *corev1.Secret) map[string]any {
+func secretHasPassword(sec *corev1.Secret) bool {
+	for _, k := range []string{"password", "root", "MONGODB_DATABASE_ADMIN_PASSWORD"} {
+		if len(sec.Data[k]) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *everestClient) clusterEndpoint(ctx context.Context, name string) (string, int64) {
+	obj, err := c.dyn.Resource(databaseClusterGVR).Namespace(c.namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", 0
+	}
+	host, _, _ := unstructured.NestedString(obj.Object, "status", "hostname")
+	port, _, _ := unstructured.NestedInt64(obj.Object, "status", "port")
+	return host, port
+}
+
+func (c *everestClient) syncedHost(inClusterHost, cluster, svcSuffix string) string {
+	svc := cluster + "-" + svcSuffix
+	if inClusterHost != "" {
+		svc = strings.Split(inClusterHost, ".")[0]
+	}
+	return fmt.Sprintf("%s-%s-x-%s.%s.svc.cluster.local", svc, c.namespace, c.vclusterName, c.hostNS)
+}
+
+func (c *everestClient) credentialsFromSecret(eng everestEngine, cluster string, sec *corev1.Secret, statusHost string, statusPort int64) map[string]any {
 	get := func(keys ...string) string {
 		for _, k := range keys {
 			if v := sec.Data[k]; len(v) > 0 {
@@ -168,20 +236,31 @@ func (c *everestClient) credentialsFromSecret(cluster string, sec *corev1.Secret
 		}
 		return ""
 	}
-	user := get("user", "username")
-	pass := get("password")
+	user := get("user", "username", "root", "MONGODB_DATABASE_ADMIN_USER")
+	pass := get("password", "root", "MONGODB_DATABASE_ADMIN_PASSWORD")
 	db := get("dbname", "database")
 	if db == "" {
 		db = "postgres"
 	}
-	port := 5432
-	if p := get("port"); p != "" {
+	port := eng.DefaultPort
+	if statusPort > 0 {
+		port = int(statusPort)
+	} else if p := get("port"); p != "" {
 		if n, err := strconv.Atoi(p); err == nil {
 			port = n
 		}
 	}
-	host := fmt.Sprintf("%s-primary-%s-x-%s.%s.svc.cluster.local", cluster, c.namespace, c.vclusterName, c.hostNS)
-	creds := postgresCredentials(host, port, "require", db, user, pass)
+	host := c.syncedHost(statusHost, cluster, eng.Service)
+	var creds map[string]any
+	switch eng.Type {
+	case "pxc":
+		creds = mysqlCredentials(host, port, db, user, pass)
+	case "psmdb":
+		creds = mongoCredentials(host, port, db, user, pass)
+	default:
+		creds = postgresCredentials(host, port, "require", db, user, pass)
+	}
 	creds["cluster"] = cluster
+	creds["engine"] = eng.Type
 	return creds
 }

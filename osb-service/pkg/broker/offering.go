@@ -3,8 +3,8 @@ package broker
 import "context"
 
 // Offering is one CF marketplace service. Implement this and register it in
-// newDefaultOfferings (see postgres.go). The broker is not tied to a cluster
-// type; env/flags supply backing-store connection facts.
+// newDefaultOfferings. The broker is not tied to a cluster type; env/flags
+// supply Everest kubeconfig and (optionally) durable metadata store facts.
 type Offering interface {
 	Catalog() Service
 	// Provision allocates the backing resource and returns bind credentials.

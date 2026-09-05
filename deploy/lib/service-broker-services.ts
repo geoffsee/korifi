@@ -1,8 +1,9 @@
 /**
  * Platform backends OSB offerings provision against.
  *
- * Postgres is not a shared cluster. OpenEverest (vcluster) installs the
- * operators; osb-service creates one DatabaseCluster per CF service instance.
+ * Databases are not shared clusters. OpenEverest (vcluster) installs the
+ * PostgreSQL, PXC, and PSMDB operators; osb-service creates one
+ * DatabaseCluster per CF service instance.
  */
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";

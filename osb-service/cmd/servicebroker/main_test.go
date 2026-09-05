@@ -34,8 +34,13 @@ func TestCatalogRequiresAndEchoesOSBHeaders(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&catalog); err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Services) != 1 || !catalog.Services[0].InstancesRetrievable || !catalog.Services[0].BindingsRetrievable {
+	if len(catalog.Services) != 3 {
 		t.Fatalf("unexpected catalog: %#v", catalog)
+	}
+	for _, svc := range catalog.Services {
+		if !svc.InstancesRetrievable || !svc.BindingsRetrievable || len(svc.Plans) != 1 || svc.Plans[0].Name != "dedicated" {
+			t.Fatalf("unexpected service: %#v", svc)
+		}
 	}
 }
 
