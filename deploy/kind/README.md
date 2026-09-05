@@ -25,7 +25,9 @@ OpenEverest runs in a vcluster; `cf create-service postgres dedicated`
 `cf create-service ozone dedicated` creates one Apache Ozone cluster
 (S3 gateway) in the same vcluster; `nats dedicated` creates a NATS
 JetStream server; `opensearch dedicated` creates an OpenSearch cluster;
-`redis dedicated` creates a Redis server. Stack outputs include `everest`,
+`redis dedicated` creates a Redis server. `aigateway dedicated` issues a
+tenant API key on the shared Envoy AI Gateway (vLLM backends; models via
+`GET /v1/models`). Stack outputs include `everest`,
 `osbBrokerUrl`, and `marketplaceHint`.
 
 ## Quick start
@@ -55,6 +57,7 @@ cf enable-service-access ozone
 cf enable-service-access nats
 cf enable-service-access opensearch
 cf enable-service-access redis
+cf enable-service-access aigateway
 cf marketplace
 ```
 

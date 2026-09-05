@@ -6,6 +6,8 @@ Dedicated Apache Ozone clusters (S3 API) and NATS JetStream servers are
 provisioned as Kubernetes resources in the same data-plane vcluster.
 OpenSearch clusters are provisioned via the OpenSearch operator. Dedicated
 Redis servers are provisioned as Kubernetes resources in the same vcluster.
+`aigateway` binds a tenant API key on the platform Envoy AI Gateway
+(vLLM backends are shared; models are listed at `GET /v1/models`).
 Add another file next to `pkg/broker/postgres.go` that implements `Offering`
 and register it in `newDefaultOfferings`.
 
@@ -28,5 +30,7 @@ Ozone cluster (OM, SCM, datanode, HTTPS S3 gateway). `cf create-service
 nats dedicated` creates one NATS JetStream server with TLS.
 `cf create-service opensearch dedicated` creates one OpenSearch cluster.
 `cf create-service redis dedicated` creates one Redis server with TLS.
+`cf create-service aigateway dedicated` issues a tenant API key on the
+shared Envoy AI Gateway (`uri` / `openai_api_base` / `api_key` in VCAP).
 The broker mounts a
 TLS secret (cert-manager self-signed unless `tlsSecretName` is set).

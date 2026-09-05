@@ -17,11 +17,15 @@ type Options struct {
 	PostgresPassword string
 	PostgresDB       string
 	// PostgresSSLMode is a libpq sslmode. Default require (TLS is required).
-	PostgresSSLMode      string
-	EverestKubeconfig    string
-	EverestNamespace     string
-	EverestHostNamespace string
-	EverestVClusterName  string
+	PostgresSSLMode        string
+	EverestKubeconfig      string
+	EverestNamespace       string
+	EverestHostNamespace   string
+	EverestVClusterName    string
+	AIGatewayKubeconfig    string
+	AIGatewayNamespace     string
+	AIGatewayHostNamespace string
+	AIGatewayVClusterName  string
 }
 
 // AddFlags is a hook called to initialize the CLI flags for broker options.
@@ -39,6 +43,10 @@ func AddFlags(o *Options) {
 	flag.StringVar(&o.EverestNamespace, "everest-namespace", envDefault("EVEREST_NAMESPACE", "everest"), "vcluster namespace for DatabaseClusters")
 	flag.StringVar(&o.EverestHostNamespace, "everest-host-namespace", envDefault("EVEREST_HOST_NAMESPACE", "everest-vcluster"), "host namespace where vcluster syncs Services")
 	flag.StringVar(&o.EverestVClusterName, "everest-vcluster-name", envDefault("EVEREST_VCLUSTER_NAME", "everest"), "vcluster name used in synced Service DNS")
+	flag.StringVar(&o.AIGatewayKubeconfig, "aigateway-kubeconfig", envDefault("AIGATEWAY_KUBECONFIG", ""), "kubeconfig for the Envoy AI Gateway vcluster (empty keeps fake provision)")
+	flag.StringVar(&o.AIGatewayNamespace, "aigateway-namespace", envDefault("AIGATEWAY_NAMESPACE", "aigateway"), "vcluster namespace for the shared AI Gateway")
+	flag.StringVar(&o.AIGatewayHostNamespace, "aigateway-host-namespace", envDefault("AIGATEWAY_HOST_NAMESPACE", "aigateway-vcluster"), "host namespace where vcluster syncs Services")
+	flag.StringVar(&o.AIGatewayVClusterName, "aigateway-vcluster-name", envDefault("AIGATEWAY_VCLUSTER_NAME", "aigateway"), "vcluster name used in synced Service DNS")
 }
 
 func envDefault(key, fallback string) string {

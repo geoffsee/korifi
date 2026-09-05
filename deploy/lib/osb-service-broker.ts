@@ -7,15 +7,20 @@
  * Backing stores come from ServiceBrokerServices via `backends`. Everest
  * backs postgres, mysql, and mongodb dedicated clusters. Apache Ozone,
  * NATS, OpenSearch, and Redis dedicated instances are created in the same vcluster.
+ * Envoy AI Gateway (separate vcluster) is a shared model fleet; OSB issues
+ * tenant API keys.
  *
  * Plans default to admin visibility; `cf enable-service-access postgres`
- * (and `mysql`, `mongodb`, `ozone`, `nats`, `opensearch`, `redis`) after install.
+ * (and `mysql`, `mongodb`, `ozone`, `nats`, `opensearch`, `redis`, `aigateway`) after install.
  */
 import * as path from "node:path";
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
 import * as random from "@pulumi/random";
-import type { EverestConnection } from "./service-broker-services";
+import type {
+	AIGatewayConnection,
+	EverestConnection,
+} from "./service-broker-services";
 
 export const osbServiceBrokerGuid = "11111111-1111-4111-8111-111111111111";
 
@@ -30,6 +35,7 @@ export interface OsbServiceBrokerArgs {
 	imagePullPolicy?: string;
 	backends: {
 		everest?: EverestConnection;
+		aigateway?: AIGatewayConnection;
 	};
 	/**
 	 * Existing kubernetes.io/tls secret in the broker namespace.
@@ -166,6 +172,40 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 							namespace: this.namespace.metadata.name,
 						},
 						stringData: { kubeconfig: everest.kubeconfig },
+					},
+					{ ...child, dependsOn: [this.namespace] },
+				),
+			);
+		}
+
+		const aigateway = args.backends.aigateway;
+		if (aigateway) {
+			stringData.AIGATEWAY_NAMESPACE = aigateway.namespace;
+			stringData.AIGATEWAY_HOST_NAMESPACE = aigateway.hostNamespace;
+			stringData.AIGATEWAY_VCLUSTER_NAME = aigateway.vclusterName;
+			stringData.AIGATEWAY_KUBECONFIG = "/var/run/aigateway/kubeconfig";
+			backendResources.push(...aigateway.resources);
+			extraVolumeMounts.push({
+				name: "aigateway-kubeconfig",
+				mountPath: "/var/run/aigateway",
+				readOnly: true,
+			});
+			extraVolumes.push({
+				name: "aigateway-kubeconfig",
+				secret: {
+					secretName: "aigateway-kubeconfig",
+					items: [{ key: "kubeconfig", path: "kubeconfig" }],
+				},
+			});
+			backendResources.push(
+				new k8s.core.v1.Secret(
+					`${name}-aigateway-kubeconfig`,
+					{
+						metadata: {
+							name: "aigateway-kubeconfig",
+							namespace: this.namespace.metadata.name,
+						},
+						stringData: { kubeconfig: aigateway.kubeconfig },
 					},
 					{ ...child, dependsOn: [this.namespace] },
 				),
