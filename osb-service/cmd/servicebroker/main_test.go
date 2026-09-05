@@ -58,6 +58,24 @@ func TestIgnoresVendorExtensionFields(t *testing.T) {
 	do(t, h, http.MethodPut, "/v2/service_instances/i", map[string]any{"service_id": broker.ServiceID, "plan_id": broker.PlanID, "vendor_extension": true}, http.StatusCreated)
 }
 
+func TestHealthzSkipsBasicAuth(t *testing.T) {
+	h := basicAuth("broker", "secret", testHandler(t))
+	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("healthz: got %d: %s", response.Code, response.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/v2/catalog", nil)
+	request.Header.Set("X-Broker-API-Version", "2.17")
+	response = httptest.NewRecorder()
+	h.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("catalog without auth: got %d", response.Code)
+	}
+}
+
 func testHandler(t *testing.T) http.Handler {
 	t.Helper()
 	logic, err := broker.NewBusinessLogic(broker.Options{})

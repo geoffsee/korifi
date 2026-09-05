@@ -203,6 +203,11 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 func basicAuth(username, password string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/healthz", "/metrics":
+			next.ServeHTTP(w, r)
+			return
+		}
 		gotUsername, gotPassword, ok := r.BasicAuth()
 		usernameOK := subtle.ConstantTimeCompare([]byte(gotUsername), []byte(username)) == 1
 		passwordOK := subtle.ConstantTimeCompare([]byte(gotPassword), []byte(password)) == 1
