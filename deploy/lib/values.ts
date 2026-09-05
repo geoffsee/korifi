@@ -28,6 +28,11 @@ export interface KorifiValuesInput {
 	eksContainerRegistryRoleARN?: string;
 	/** When true (kind installer defaults), enable experimental managed services. */
 	managedServices?: boolean;
+	/**
+	 * Kind: enable experimental UAA auth. When set, merges into
+	 * `experimental.uaa` (chart defaults stay false; Pulumi supplies values).
+	 */
+	uaaUrl?: string;
 	logLevel?: string;
 	/**
 	 * Override Korifi component images. Kind builds these from the checkout
@@ -76,16 +81,31 @@ export function buildKorifiValues(
 
 	if (input.platform === "kind") {
 		values.logLevel = input.logLevel ?? "debug";
-		values.stagingRequirements = { buildCacheMB: 1024 };
+		values.stagingRequirements = {
+			buildCacheMB: 1024,
+			// Request enough to schedule a native-image build on a typical ~8Gi
+			// kind node (this cluster has ~3.8Gi unreserved). No limit, so the
+			// pod can still burst. 6144+ requests stay Pending here.
+			memoryMB: 3072,
+			diskMB: 4096,
+		};
 		values.controllers = { taskTTL: "5s" };
 		values.jobTaskRunner = { jobTTL: "5s" };
+		const experimental: Record<string, unknown> = {};
 		if (input.managedServices !== false) {
-			values.experimental = {
-				managedServices: {
-					enabled: true,
-					trustInsecureBrokers: true,
-				},
+			experimental.managedServices = {
+				enabled: true,
+				trustInsecureBrokers: true,
 			};
+		}
+		if (input.uaaUrl) {
+			experimental.uaa = {
+				enabled: true,
+				url: input.uaaUrl,
+			};
+		}
+		if (Object.keys(experimental).length > 0) {
+			values.experimental = experimental;
 		}
 	}
 

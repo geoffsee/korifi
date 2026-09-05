@@ -3,11 +3,13 @@
  *
  * Layers:
  *
- *   cluster.ts               kind cluster + containerd registry trust
+ *   UaaCerts                 CA + server PEMs for OIDC + TLS proxy
+ *   cluster.ts               kind cluster + OIDC + registry NodePorts
  *   LocalRegistry            in-cluster docker-registry NodePort 30050
- *   KindKorifiImages         docker build + kind load controllers/api/migration
  *   KorifiDependencies       cert-manager, kpack, contour, metrics-server
- *   KorifiRelease            in-tree Helm chart (knative-runner)
+ *   UaaVcluster              vcluster + UAA + TLS NodePort proxy :30443
+ *   KindKorifiImages         docker build + kind load controllers/api/migration
+ *   KorifiRelease            Korifi Helm chart (knative-runner, experimental.uaa)
  *   KnativeServing           Operator Helm + KnativeServing CR (Kourier ClusterIP)
  *   ContourGateway           NodePort GatewayClass params
  *   ServiceBrokerServices    shared backing stores (postgres, …)
@@ -20,6 +22,7 @@
  *   pulumi up --stack dev
  */
 import * as path from "node:path";
+import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
 import {
 	ContourGateway,
@@ -32,26 +35,49 @@ import {
 	LocalRegistry,
 	OsbServiceBroker,
 	ServiceBrokerServices,
+	UaaCerts,
+	UaaVcluster,
 	osbServicePath,
 	kindGatewayPorts,
 	kindKpackBuilderRepository,
 	kindRegistryPrefix,
+	kindUaaHostname,
+	kindUaaNodePort,
 } from "@korifi/deploy-lib";
 import { KindCluster } from "./cluster";
 import {
-	adminUserName,
+	adminEmail,
 	apiUrl,
 	appDomain,
 	clusterName,
 	kubeconfigPath,
+	oidcPrefix,
 	pinned,
 	registryUser,
 } from "./config";
 
-const cluster = new KindCluster("kind", {
-	clusterName,
-	kubeconfigPath,
+const uaaUrl = `https://127.0.0.1:${kindUaaNodePort}/uaa`;
+const adminUserName = `${oidcPrefix}:${adminEmail}`;
+
+const certs = new UaaCerts("uaa-certs", {
+	hostname: kindUaaHostname,
 });
+
+const cluster = new KindCluster(
+	"kind",
+	{
+		clusterName,
+		kubeconfigPath,
+		oidc: {
+			issuerUrl: `${uaaUrl}/oauth/token`,
+			caDir: certs.outputDir,
+			clientId: "cf",
+			usernameClaim: "user_name",
+			usernamePrefix: `${oidcPrefix}:`,
+		},
+	},
+	{ dependsOn: [certs.filesReady] },
+);
 
 const namespaces = new KorifiNamespaces(
 	"ns",
@@ -73,6 +99,15 @@ const cfPullSecret = registry.pullSecret(
 	"cf-registry-credentials",
 	namespaces.root.metadata.name,
 	{ provider: cluster.provider, dependsOn: [registry.release, namespaces.root] },
+);
+
+const korifiPullSecret = registry.pullSecret(
+	"korifi-registry-credentials",
+	namespaces.korifi.metadata.name,
+	{
+		provider: cluster.provider,
+		dependsOn: [registry.release, namespaces.korifi],
+	},
 );
 
 // In-tree chart + images built from this checkout. Hub *:latest is the last
@@ -104,6 +139,20 @@ const dependencies = new KorifiDependencies(
 	{ dependsOn: [namespaces] },
 );
 
+const uaa = new UaaVcluster(
+	"uaa",
+	{
+		provider: cluster.provider,
+		certs,
+		kindClusterName: clusterName,
+		uaaUrl,
+		adminEmail,
+		oidcPrefix,
+		dependsOn: [dependencies.job, cluster],
+	},
+	{ dependsOn: [dependencies, certs] },
+);
+
 const korifi = new KorifiRelease(
 	"korifi",
 	{
@@ -117,6 +166,7 @@ const korifi = new KorifiRelease(
 			appDomain,
 			containerRepositoryPrefix: kindRegistryPrefix(),
 			kpackBuilderRepository: kindKpackBuilderRepository(),
+			uaaUrl,
 			networking: {
 				gatewayClass: "contour",
 				gatewayNamespace: namespaces.gatewayName,
@@ -135,11 +185,13 @@ const korifi = new KorifiRelease(
 			dependencies.job,
 			registry.release,
 			cfPullSecret,
+			korifiPullSecret,
 			namespaces.gateway,
+			uaa.proxyService,
 			images.loaded,
 		],
 	},
-	{ dependsOn: [dependencies, registry, images] },
+	{ dependsOn: [dependencies, registry, uaa, images] },
 );
 
 const knative = new KnativeServing(
@@ -155,6 +207,26 @@ const knative = new KnativeServing(
 	{ dependsOn: [korifi] },
 );
 
+new k8s.rbac.v1.ClusterRoleBinding(
+	"uaa-admin-cluster-admin",
+	{
+		metadata: { name: "uaa-admin-cluster-admin" },
+		roleRef: {
+			apiGroup: "rbac.authorization.k8s.io",
+			kind: "ClusterRole",
+			name: "cluster-admin",
+		},
+		subjects: [
+			{
+				apiGroup: "rbac.authorization.k8s.io",
+				kind: "User",
+				name: adminUserName,
+			},
+		],
+	},
+	{ provider: cluster.provider, dependsOn: [cluster] },
+);
+
 const gateway = new ContourGateway(
 	"contour",
 	{
@@ -165,8 +237,6 @@ const gateway = new ContourGateway(
 	{ dependsOn: [korifi] },
 );
 
-// Broker backends. Postgres only for now; flip `enable` (and add installers
-// in deploy/lib/service-broker-services.ts) to grow the set.
 const brokerServices = new ServiceBrokerServices(
 	"broker-services",
 	{
@@ -206,14 +276,17 @@ export const kubeconfig = kubeconfigPath;
 export const cfApiUrl = `https://${apiUrl}`;
 export const appsDomain = `*.${appDomain}`;
 export const orgHint = "cf create-org org && cf create-space -o org space";
-export const authHint = `cf api ${cfApiUrl} --skip-ssl-validation && cf auth ${adminUserName}`;
+export const authHint = `cf api ${cfApiUrl} --skip-ssl-validation && cf login -u ${adminEmail} -p "$(pulumi stack output uaaAdminPassword --show-secrets)"`;
+export const uaaIssuerUrl = uaaUrl;
+export const uaaAdminEmail = adminEmail;
+export const uaaAdminPassword = pulumi.secret(uaa.adminPassword);
+export const cfAdminUserName = adminUserName;
 export const gatewayClass = gateway.gatewayClass.metadata.name;
 export const registryHost = registry.clusterHost;
 export const knativeServing = knative.serving.metadata.name;
 export const controllersImage = images.controllersImage;
 export const apiImage = images.apiImage;
 
-/** Broker-facing Postgres admin facts (password is a secret output). */
 export const postgres = brokerServices.postgres
 	? {
 			host: brokerServices.postgres.host,
