@@ -20,6 +20,8 @@ test("Everest vcluster installs OpenEverest operators only", () => {
 	expect(text).toContain("psmdb: true");
 	expect(text).toContain("inClusterKubeconfig");
 	expect(text).toContain("everest-vcluster");
+	expect(text).toContain('chart: "opensearch-operator"');
+	expect(text).toContain("opensearchOperatorChart");
 	expect(text).not.toContain("kind: \"DatabaseCluster\"");
 	expect(text).not.toContain("kind: DatabaseCluster");
 });
