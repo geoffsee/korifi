@@ -34,7 +34,7 @@ func TestCatalogRequiresAndEchoesOSBHeaders(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&catalog); err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Services) != 4 {
+	if len(catalog.Services) != 5 {
 		t.Fatalf("unexpected catalog: %#v", catalog)
 	}
 	for _, svc := range catalog.Services {

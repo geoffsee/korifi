@@ -23,7 +23,8 @@ After `pulumi up` the stack builds [`osb-service/`](../../osb-service),
 OpenEverest runs in a vcluster; `cf create-service postgres dedicated`
 (or `mysql` / `mongodb`) creates one DatabaseCluster per instance.
 `cf create-service ozone dedicated` creates one Apache Ozone cluster
-(S3 gateway) in the same vcluster. Stack outputs include `everest`,
+(S3 gateway) in the same vcluster; `nats dedicated` creates a NATS
+JetStream server. Stack outputs include `everest`,
 `osbBrokerUrl`, and `marketplaceHint`.
 
 ## Quick start
@@ -50,6 +51,7 @@ cf enable-service-access postgres
 cf enable-service-access mysql
 cf enable-service-access mongodb
 cf enable-service-access ozone
+cf enable-service-access nats
 cf marketplace
 ```
 
