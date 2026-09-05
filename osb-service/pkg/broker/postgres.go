@@ -36,10 +36,15 @@ func newDefaultOfferings(o Options) (store, []Offering, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	var vc *vclusterClient
+	if everest != nil {
+		vc = everest.vclusterClient
+	}
 	return st, []Offering{
 		newPostgresOffering(o, everest),
 		newMySQLOffering(o, everest),
 		newMongoOffering(o, everest),
+		newOzoneOffering(o, vc),
 	}, nil
 }
 
