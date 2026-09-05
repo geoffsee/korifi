@@ -45,6 +45,7 @@ func newDefaultOfferings(o Options) (store, []Offering, error) {
 		newMySQLOffering(o, everest),
 		newMongoOffering(o, everest),
 		newOzoneOffering(o, vc),
+		newNATSOffering(o, vc),
 	}, nil
 }
 
