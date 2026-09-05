@@ -188,6 +188,28 @@ exit 1
 			virtualOpts,
 		);
 
+		// Everest always starts its MonitoringConfig controller, even when
+		// monitoring resources are disabled. Install only the matching CRDs so
+		// its VMAgent informer can start without running VictoriaMetrics itself.
+		const monitoringCrds = new k8s.helm.v3.Release(
+			`${name}-monitoring-crds`,
+			{
+				name: "victoria-metrics-operator-crds",
+				chart: "victoria-metrics-operator-crds",
+				version: versions.victoriaMetricsOperatorCrdsChart,
+				repositoryOpts: {
+					repo: "https://victoriametrics.github.io/helm-charts",
+				},
+				namespace: "everest-system",
+				timeout: 300,
+			},
+			{
+				...virtualOpts,
+				dependsOn: [systemNs],
+				customTimeouts: { create: "10m", update: "10m" },
+			},
+		);
+
 		const everest = new k8s.helm.v3.Release(
 			`${name}-everest`,
 			{
@@ -219,7 +241,7 @@ exit 1
 			},
 			{
 				...virtualOpts,
-				dependsOn: [systemNs],
+				dependsOn: [systemNs, monitoringCrds],
 				customTimeouts: { create: "20m", update: "20m" },
 			},
 		);
