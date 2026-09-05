@@ -32,6 +32,7 @@ test("kind stack composes shared lib components", () => {
 	expect(all).toContain("osbServicePath");
 	expect(all).toContain("osb-service");
 	expect(all).toContain("everest: brokerServices.everest");
+	expect(all).toContain("aigateway: brokerServices.aigateway");
 	expect(all).toContain("postgres dedicated");
 	expect(all).toContain("enable-service-access mysql");
 	expect(all).toContain("enable-service-access mongodb");
@@ -39,6 +40,7 @@ test("kind stack composes shared lib components", () => {
 	expect(all).toContain("enable-service-access nats");
 	expect(all).toContain("enable-service-access opensearch");
 	expect(all).toContain("enable-service-access redis");
+	expect(all).toContain("enable-service-access aigateway");
 	expect(all).not.toContain("PostgresServiceBroker");
 	expect(all).not.toContain("--insecure");
 	expect(all).not.toContain('sslMode: "disable"');
@@ -75,4 +77,13 @@ test("auth flow uses cf login against UAA", () => {
 	expect(all).toContain("cf login");
 	expect(all).toContain("adminEmail");
 	expect(all).not.toContain("cf auth kubernetes-admin");
+});
+
+test("AI Gateway backend routes and credentials use separate config", () => {
+	expect(all).toContain('getObject<AIGatewayBackendConfig[]>("aiGatewayBackends")');
+	expect(all).toContain('models: ["gpt-5.6-luna"]');
+	expect(all).toContain("`aiGatewayBackendApiKey-${backend.name}`");
+	expect(all).toContain("cfg.getSecret(secretKey)");
+	expect(all).not.toContain('cfg.get("aiGatewayApiKey")');
+	expect(all).not.toContain('cfg.get("aiGatewayBackendUrl")');
 });

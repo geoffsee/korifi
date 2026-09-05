@@ -24,6 +24,10 @@ export const versions = {
 	vclusterChart: "0.36.1",
 	/** OpenSearch Kubernetes Operator Helm chart. */
 	opensearchOperatorChart: "2.8.1",
+	/** Envoy Gateway Helm chart (OCI docker.io/envoyproxy/gateway-helm). */
+	envoyGatewayChart: "v1.8.1",
+	/** Envoy AI Gateway Helm charts (CRDs + controller). */
+	aiGatewayChart: "v1.1.0",
 	/** Official UAA image (cfidentity/uaa). */
 	uaaImage: "docker.io/cfidentity/uaa:v79.7.0",
 } as const;

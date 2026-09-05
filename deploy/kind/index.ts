@@ -47,6 +47,7 @@ import {
 import { KindCluster } from "./cluster";
 import {
 	adminEmail,
+	aiGatewayBackends,
 	apiUrl,
 	appDomain,
 	clusterName,
@@ -242,7 +243,8 @@ const brokerServices = new ServiceBrokerServices(
 	{
 		provider: cluster.provider,
 		kindClusterName: clusterName,
-		enable: { postgres: true },
+		aigatewayBackends: aiGatewayBackends,
+		enable: { postgres: true, aigateway: true },
 		dependsOn: [korifi.release],
 	},
 	{ dependsOn: [korifi] },
@@ -266,6 +268,7 @@ const osbBroker = new OsbServiceBroker(
 		imagePullPolicy: "Never",
 		backends: {
 			everest: brokerServices.everest,
+			aigateway: brokerServices.aigateway,
 		},
 		rootNamespace: namespaces.rootName,
 		dependsOn: [korifi.release, osbImage.loaded],
@@ -296,7 +299,15 @@ export const everest = brokerServices.everest
 		}
 	: undefined;
 
+export const aigateway = brokerServices.aigateway
+	? {
+			namespace: brokerServices.aigateway.namespace,
+			hostNamespace: brokerServices.aigateway.hostNamespace,
+			vclusterName: brokerServices.aigateway.vclusterName,
+		}
+	: undefined;
+
 export const osbBrokerUrl = osbBroker.url;
 export const osbServiceImage = osbImage.image;
 export const marketplaceHint =
-	"cf enable-service-access postgres && cf enable-service-access mysql && cf enable-service-access mongodb && cf enable-service-access ozone && cf enable-service-access nats && cf enable-service-access opensearch && cf enable-service-access redis && cf marketplace && cf create-service postgres dedicated mydb";
+	"cf enable-service-access postgres && cf enable-service-access mysql && cf enable-service-access mongodb && cf enable-service-access ozone && cf enable-service-access nats && cf enable-service-access opensearch && cf enable-service-access redis && cf enable-service-access aigateway && cf marketplace && cf create-service postgres dedicated mydb";
