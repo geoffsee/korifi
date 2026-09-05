@@ -2,8 +2,10 @@
 
 Open Service Broker with a catalog of **offerings**. Dedicated PostgreSQL,
 Percona XtraDB (MySQL), and MongoDB clusters are provisioned via OpenEverest.
-Add another file next to `pkg/broker/postgres.go` that implements `Offering`
-and register it in `newDefaultOfferings`.
+Dedicated Apache Ozone clusters (S3 API) are provisioned as Kubernetes
+resources in the same data-plane vcluster. Add another file next to
+`pkg/broker/postgres.go` that implements `Offering` and register it in
+`newDefaultOfferings`.
 
 The process serves HTTPS on port 8443. TLS cert/key files are required
 (`--tls-cert-file`, `--tls-private-key-file`). `--insecure` is only for
@@ -19,5 +21,6 @@ go run ./cmd/servicebroker --insecure --port 8080 \
 
 Deploy stacks give the broker a kubeconfig for the OpenEverest vcluster.
 Each `cf create-service {postgres|mysql|mongodb} dedicated` creates one
-DatabaseCluster. The broker mounts a TLS secret (cert-manager self-signed
-unless `tlsSecretName` is set).
+DatabaseCluster. `cf create-service ozone dedicated` creates one Apache
+Ozone cluster (OM, SCM, datanode, HTTPS S3 gateway). The broker mounts a
+TLS secret (cert-manager self-signed unless `tlsSecretName` is set).

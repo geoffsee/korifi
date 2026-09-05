@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -12,9 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 var databaseClusterGVR = schema.GroupVersionResource{
@@ -52,36 +48,15 @@ var (
 )
 
 type everestClient struct {
-	dyn          dynamic.Interface
-	core         kubernetes.Interface
-	namespace    string
-	hostNS       string
-	vclusterName string
+	*vclusterClient
 }
 
 func newEverestClient(o Options) (*everestClient, error) {
-	if o.EverestKubeconfig == "" {
-		return nil, nil
-	}
-	cfg, err := clientcmd.BuildConfigFromFlags("", o.EverestKubeconfig)
-	if err != nil {
-		return nil, fmt.Errorf("everest kubeconfig: %w", err)
-	}
-	dyn, err := dynamic.NewForConfig(cfg)
-	if err != nil {
+	vc, err := newVClusterClient(o)
+	if err != nil || vc == nil {
 		return nil, err
 	}
-	core, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return &everestClient{
-		dyn:          dyn,
-		core:         core,
-		namespace:    o.EverestNamespace,
-		hostNS:       o.EverestHostNamespace,
-		vclusterName: o.EverestVClusterName,
-	}, nil
+	return &everestClient{vclusterClient: vc}, nil
 }
 
 func (c *everestClient) healthy(ctx context.Context) error {
@@ -190,14 +165,6 @@ func (c *everestClient) clusterEndpoint(ctx context.Context, name string) (strin
 	host, _, _ := unstructured.NestedString(obj.Object, "status", "hostname")
 	port, _, _ := unstructured.NestedInt64(obj.Object, "status", "port")
 	return host, port
-}
-
-func (c *everestClient) syncedHost(inClusterHost, cluster, svcSuffix string) string {
-	svc := cluster + "-" + svcSuffix
-	if inClusterHost != "" {
-		svc = strings.Split(inClusterHost, ".")[0]
-	}
-	return fmt.Sprintf("%s-%s-x-%s.%s.svc.cluster.local", svc, c.namespace, c.vclusterName, c.hostNS)
 }
 
 func (c *everestClient) credentialsFromSecret(eng everestEngine, cluster string, sec *corev1.Secret, statusHost string, statusPort int64) map[string]any {
