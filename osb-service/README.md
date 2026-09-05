@@ -1,8 +1,9 @@
 # osb-service
 
-Open Service Broker with a catalog of **offerings**. Postgres is the first
-offering; add another file next to `pkg/broker/postgres.go` that implements
-`Offering` and register it in `newDefaultOfferings`.
+Open Service Broker with a catalog of **offerings**. Dedicated PostgreSQL,
+Percona XtraDB (MySQL), and MongoDB clusters are provisioned via OpenEverest.
+Add another file next to `pkg/broker/postgres.go` that implements `Offering`
+and register it in `newDefaultOfferings`.
 
 The process serves HTTPS on port 8443. TLS cert/key files are required
 (`--tls-cert-file`, `--tls-private-key-file`). `--insecure` is only for
@@ -17,6 +18,6 @@ go run ./cmd/servicebroker --insecure --port 8080 \
 ```
 
 Deploy stacks give the broker a kubeconfig for the OpenEverest vcluster.
-Each `cf create-service postgres dedicated` creates a DatabaseCluster.
-The broker mounts a TLS secret (cert-manager self-signed unless
-`tlsSecretName` is set).
+Each `cf create-service {postgres|mysql|mongodb} dedicated` creates one
+DatabaseCluster. The broker mounts a TLS secret (cert-manager self-signed
+unless `tlsSecretName` is set).

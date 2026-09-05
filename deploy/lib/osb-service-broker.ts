@@ -4,11 +4,11 @@
  * platform-managed certificate; otherwise a cert-manager self-signed cert is
  * issued. Self-signed material needs Korifi `trustInsecureBrokers`.
  *
- * Backing stores come from ServiceBrokerServices via `backends`. Postgres is
- * first; add keys (and env) as offerings land in osb-service.
+ * Backing stores come from ServiceBrokerServices via `backends`. Everest
+ * backs postgres, mysql, and mongodb dedicated clusters.
  *
  * Plans default to admin visibility; `cf enable-service-access postgres`
- * after install.
+ * (and `mysql`, `mongodb`) after install.
  */
 import * as path from "node:path";
 import * as k8s from "@pulumi/kubernetes";
