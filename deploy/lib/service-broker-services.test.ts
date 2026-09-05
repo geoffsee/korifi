@@ -7,7 +7,7 @@ const text = fs.readFileSync(
 	"utf8",
 );
 
-test("postgres backend is OpenEverest in a vcluster", () => {
+test("database backends are OpenEverest in a vcluster", () => {
 	expect(text).toContain("EverestVcluster");
 	expect(text).toContain("kindClusterName");
 	expect(text).toContain("inClusterKubeconfig");

@@ -15,7 +15,9 @@ test("Everest vcluster installs OpenEverest operators only", () => {
 	expect(text).toContain("kindEverestVclusterLocalApiPort");
 	expect(text).toContain("command.local.runOutput");
 	expect(text).toContain("apiForwardReady.stdout");
-	expect(text).toContain("postgresql");
+	expect(text).toContain("postgresql: true");
+	expect(text).toContain("pxc: true");
+	expect(text).toContain("psmdb: true");
 	expect(text).toContain("inClusterKubeconfig");
 	expect(text).toContain("everest-vcluster");
 	expect(text).not.toContain("kind: \"DatabaseCluster\"");
