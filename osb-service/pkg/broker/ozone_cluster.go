@@ -16,6 +16,15 @@ import (
 
 const ozoneImage = "docker.io/apache/ozone:2.0.0"
 
+type ozoneComponent struct {
+	comp   string
+	port   int32
+	args   []string
+	init   []string
+	env    []corev1.EnvVar
+	volume bool
+}
+
 func (c *vclusterClient) provisionOzone(ctx context.Context, instanceID string) (map[string]any, error) {
 	name, err := resourceName("o", instanceID)
 	if err != nil {
@@ -57,28 +66,7 @@ func (c *vclusterClient) provisionOzone(ctx context.Context, instanceID string) 
 		return nil, err
 	}
 
-	components := []struct {
-		comp   string
-		port   int32
-		args   []string
-		init   []string
-		env    []corev1.EnvVar
-		volume bool
-	}{
-		{comp: "scm", port: 9861, args: []string{"ozone", "scm"}, init: []string{"ozone", "scm", "--init"}, volume: true},
-		{
-			comp: "om", port: 9862, args: []string{"ozone", "om"}, volume: true,
-			env: []corev1.EnvVar{
-				{Name: "WAITFOR", Value: name + "-scm-0." + name + "-scm:9876"},
-				{Name: "ENSURE_OM_INITIALIZED", Value: "/data/metadata/om/current/VERSION"},
-			},
-		},
-		{comp: "datanode", port: 9882, args: []string{"ozone", "datanode"}, volume: true},
-		{
-			comp: "s3g", port: 9878, args: []string{"ozone", "s3g"},
-			env: []corev1.EnvVar{{Name: "WAITFOR", Value: name + "-om-0." + name + "-om:9862"}},
-		},
-	}
+	components := ozoneComponents(name)
 	for _, spec := range components {
 		if err := c.createHeadlessService(ctx, name+"-"+spec.comp, spec.comp, spec.port, labels); err != nil {
 			return nil, err
@@ -87,8 +75,10 @@ func (c *vclusterClient) provisionOzone(ctx context.Context, instanceID string) 
 			return nil, err
 		}
 	}
-	if err := c.waitSTS(ctx, name+"-s3g"); err != nil {
-		return nil, err
+	for _, spec := range components {
+		if err := c.waitSTS(ctx, name+"-"+spec.comp); err != nil {
+			return nil, err
+		}
 	}
 	creds := ozoneCredentials(host, 9878, bucket, access, secretKey)
 	creds["ca_cert"] = string(tls.CertPEM)
@@ -96,6 +86,24 @@ func (c *vclusterClient) provisionOzone(ctx context.Context, instanceID string) 
 	creds["instance_id"] = instanceID
 	creds["engine"] = "ozone"
 	return creds, nil
+}
+
+func ozoneComponents(name string) []ozoneComponent {
+	return []ozoneComponent{
+		{comp: "scm", port: 9861, args: []string{"ozone", "scm"}, init: []string{"ozone", "scm", "--init"}, volume: true},
+		{
+			comp: "om", port: 9862, args: []string{"ozone", "om"}, volume: true,
+			env: []corev1.EnvVar{
+				{Name: "WAITFOR", Value: name + "-scm-0." + name + "-scm:9861"},
+				{Name: "ENSURE_OM_INITIALIZED", Value: "/data/metadata/om/current/VERSION"},
+			},
+		},
+		{comp: "datanode", port: 9883, args: []string{"ozone", "datanode"}, volume: true},
+		{
+			comp: "s3g", port: 9878, args: []string{"ozone", "s3g"},
+			env: []corev1.EnvVar{{Name: "WAITFOR", Value: name + "-om-0." + name + "-om:9862"}},
+		},
+	}
 }
 
 func (c *vclusterClient) createOzoneConfig(ctx context.Context, name string, ls map[string]string, keystorePass string) error {
@@ -209,6 +217,7 @@ func (c *vclusterClient) createOzoneSTS(ctx context.Context, cluster, component 
 	replicas := int32(1)
 	cpu := resource.MustParse("250m")
 	mem := resource.MustParse("512Mi")
+	startupProbe, livenessProbe, readinessProbe := ozoneTCPProbes(port)
 	container := corev1.Container{
 		Name:            component,
 		Image:           ozoneImage,
@@ -224,11 +233,9 @@ func (c *vclusterClient) createOzoneSTS(ctx context.Context, cluster, component 
 			{Name: "data", MountPath: "/data"},
 			{Name: "tls", MountPath: "/etc/ozone-tls", ReadOnly: true},
 		},
-		LivenessProbe: &corev1.Probe{
-			ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(port)}},
-			InitialDelaySeconds: 45,
-			PeriodSeconds:       10,
-		},
+		StartupProbe:   startupProbe,
+		LivenessProbe:  livenessProbe,
+		ReadinessProbe: readinessProbe,
 		SecurityContext: &corev1.SecurityContext{
 			RunAsNonRoot:             boolPtr(true),
 			RunAsUser:                int64Ptr(1000),
@@ -259,7 +266,9 @@ func (c *vclusterClient) createOzoneSTS(ctx context.Context, cluster, component 
 		init := container
 		init.Name = "init"
 		init.Args = initArgs
+		init.StartupProbe = nil
 		init.LivenessProbe = nil
+		init.ReadinessProbe = nil
 		sts.Spec.Template.Spec.InitContainers = []corev1.Container{init}
 	}
 	if persist {
@@ -281,6 +290,21 @@ func (c *vclusterClient) createOzoneSTS(ctx context.Context, cluster, component 
 		return fmt.Errorf("create statefulset %s: %w", name, err)
 	}
 	return nil
+}
+
+func ozoneTCPProbes(port int32) (*corev1.Probe, *corev1.Probe, *corev1.Probe) {
+	handler := corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(port)}}
+	return &corev1.Probe{
+		ProbeHandler:     handler,
+		PeriodSeconds:    5,
+		FailureThreshold: 60,
+	}, &corev1.Probe{
+		ProbeHandler:  handler,
+		PeriodSeconds: 10,
+	}, &corev1.Probe{
+		ProbeHandler:  handler,
+		PeriodSeconds: 5,
+	}
 }
 
 func (c *vclusterClient) waitSTS(ctx context.Context, name string) error {
