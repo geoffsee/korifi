@@ -270,6 +270,7 @@ func (c *vclusterClient) createOzoneSTS(ctx context.Context, cluster, component 
 		init.StartupProbe = nil
 		init.LivenessProbe = nil
 		init.ReadinessProbe = nil
+		init.Ports = nil
 		sts.Spec.Template.Spec.InitContainers = []corev1.Container{init}
 	}
 	if persist {

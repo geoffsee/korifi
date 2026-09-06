@@ -54,3 +54,39 @@ func TestOzoneHeadlessServicesPublishAddressesBeforePodsAreReady(t *testing.T) {
 		t.Fatal("headless service must publish not-ready addresses so StatefulSet pods can resolve their own hostnames during startup")
 	}
 }
+
+func TestOzoneInitContainersDoNotDeclareServicePorts(t *testing.T) {
+	client := &vclusterClient{core: fake.NewSimpleClientset(), namespace: "everest"}
+	labels := map[string]string{"osb.korifi/cluster": "test"}
+
+	if err := client.createOzoneSTS(
+		context.Background(),
+		"test",
+		"scm",
+		9861,
+		[]string{"ozone", "scm"},
+		[]string{"ozone", "scm", "--init"},
+		nil,
+		false,
+		labels,
+	); err != nil {
+		t.Fatalf("create SCM StatefulSet: %v", err)
+	}
+	sts, err := client.core.AppsV1().StatefulSets("everest").Get(context.Background(), "test-scm", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get SCM StatefulSet: %v", err)
+	}
+	if len(sts.Spec.Template.Spec.Containers) != 1 {
+		t.Fatalf("main containers = %d, want 1", len(sts.Spec.Template.Spec.Containers))
+	}
+	mainPorts := sts.Spec.Template.Spec.Containers[0].Ports
+	if len(mainPorts) != 1 || mainPorts[0].ContainerPort != 9861 {
+		t.Fatalf("main container ports = %#v, want port 9861", mainPorts)
+	}
+	if len(sts.Spec.Template.Spec.InitContainers) != 1 {
+		t.Fatalf("init containers = %d, want 1", len(sts.Spec.Template.Spec.InitContainers))
+	}
+	if len(sts.Spec.Template.Spec.InitContainers[0].Ports) != 0 {
+		t.Fatalf("init container ports = %#v, want none", sts.Spec.Template.Spec.InitContainers[0].Ports)
+	}
+}
