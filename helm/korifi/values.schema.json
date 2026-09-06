@@ -532,6 +532,24 @@
         "image": {
           "description": "The container image of the migration job",
           "type": "string"
+        },
+        "nodeSelector": {
+          "description": "Node labels for the migration job pod assignment.",
+          "type": "object",
+          "properties": {}
+        },
+        "tolerations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": { "type": "string" },
+              "operator": { "type": "string" },
+              "value": { "type": "string" },
+              "effect": { "type": "string" }
+            },
+            "required": ["key", "operator", "effect"]
+          }
         }
       },
       "required": ["include"],

@@ -1,7 +1,7 @@
 /**
  * Shared, reusable Korifi deploy building blocks.
  *
- * Stacks under deploy/{kind,eks,gke} compose these ComponentResources;
+ * Stacks under deploy/{kind,k0s,eks,gke} compose these ComponentResources;
  * pure helpers in values.ts / versions.ts are unit-tested without a cluster.
  */
 export { ContourGateway, type ContourGatewayArgs, type ContourPublishType } from "./contour-gateway";
@@ -21,9 +21,26 @@ export {
 	type KindKorifiImagesArgs,
 } from "./kind-images";
 export {
+	K0sKorifiImages,
+	type K0sKorifiImagesArgs,
+} from "./k0s-images";
+export {
 	KindOsbBrokerImage,
 	type KindOsbBrokerImageArgs,
 } from "./kind-osb-broker-image";
+export {
+	K0sOsbBrokerImage,
+	type K0sOsbBrokerImageArgs,
+} from "./k0s-osb-broker-image";
+export {
+	mergeDeep,
+	nodeRoleKey,
+	placementFor,
+	vclusterSchedulingValues,
+	type NodePlacement,
+	type NodeRole,
+	type NodeToleration,
+} from "./node-placement";
 export {
 	OsbServiceBroker,
 	osbServiceBrokerGuid,
@@ -85,6 +102,10 @@ export {
 	kindKpackBuilderRepository,
 	kindRegistry,
 	kindRegistryPrefix,
+	k0sGatewayPorts,
+	k0sKpackBuilderRepository,
+	k0sRegistry,
+	k0sRegistryPrefix,
 	type KorifiPlatform,
 	type KorifiValuesInput,
 } from "./values";

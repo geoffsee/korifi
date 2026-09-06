@@ -15,6 +15,7 @@ import {
 	type AIGatewayBackend,
 } from "./aigateway-vcluster";
 import { EverestVcluster } from "./everest-vcluster";
+import type { NodePlacement } from "./node-placement";
 
 /** Generic connection facts for a custom broker backend. */
 export interface ServiceBrokerServiceConnection {
@@ -51,6 +52,8 @@ export interface ServiceBrokerServicesArgs {
 	provider: k8s.Provider;
 	/** Kind cluster name; used to reach the Everest vcluster API. */
 	kindClusterName: string;
+	kubeconfigPath?: string;
+	hostScheduling?: NodePlacement;
 	/** External OpenAI-compatible backends and their model associations. */
 	aigatewayBackends?: AIGatewayBackend[];
 	enable?: {
@@ -83,6 +86,8 @@ export class ServiceBrokerServices extends pulumi.ComponentResource {
 				{
 					provider: args.provider,
 					kindClusterName: args.kindClusterName,
+					kubeconfigPath: args.kubeconfigPath,
+					hostScheduling: args.hostScheduling,
 					dependsOn: args.dependsOn,
 				},
 				{ parent: this },
@@ -107,6 +112,8 @@ export class ServiceBrokerServices extends pulumi.ComponentResource {
 				{
 					provider: args.provider,
 					kindClusterName: args.kindClusterName,
+					kubeconfigPath: args.kubeconfigPath,
+					hostScheduling: args.hostScheduling,
 					backends: args.aigatewayBackends,
 					dependsOn: args.dependsOn,
 				},

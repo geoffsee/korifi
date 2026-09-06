@@ -13,10 +13,12 @@ Reusable Pulumi components and pure helpers for installing Korifi.
 | `local-registry.ts` | kind in-cluster registry + pull-secret helper |
 | `korifi-release.ts` | Helm `Release` wrapper |
 | `kind-images.ts` | Build Korifi images from the checkout and `kind load` them |
-| `contour-gateway.ts` | GatewayClass (+ NodePort params on kind) |
+| `k0s-images.ts` | Build Korifi images from the checkout and `k0s ctr images import` them |
+| `contour-gateway.ts` | GatewayClass (+ NodePort params on kind/k0s) |
 | `knative.ts` | Knative Operator Helm + `KnativeServing` CR (Kourier ClusterIP) |
-| `kind-images.ts` | Build Korifi images from the checkout and `kind load` them |
 | `kind-osb-broker-image.ts` | Build the in-tree `osb-service` image and `kind load` it |
+| `k0s-osb-broker-image.ts` | Build the in-tree `osb-service` image and import it into k0s |
+| `node-placement.ts` | k0s node role labels, taints, and vcluster scheduling values |
 | `ecr-kpack-irsa.ts` | Annotate kpack controller SA for ECR |
 | `everest-vcluster.ts` | OpenEverest + OpenSearch operator in a vcluster (OSB creates clusters) |
 | `aigateway-vcluster.ts` | Envoy AI Gateway + external OpenAI-compatible backend (OSB issues tenant API keys) |
@@ -26,7 +28,7 @@ Reusable Pulumi components and pure helpers for installing Korifi.
 | `uaa-vcluster.ts` | vcluster + UAA + TLS NodePort proxy (kind UAA) |
 | `custom-broker-service.example.ts` | Copy-paste template for adding a custom broker backend |
 
-Stacks under `deploy/{kind,eks,gke}` compose these components; they do not
+Stacks under `deploy/{kind,k0s,eks,gke}` compose these components; they do not
 duplicate Helm value logic.
 
 ## Test

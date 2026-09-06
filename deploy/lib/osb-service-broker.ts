@@ -44,6 +44,8 @@ export interface OsbServiceBrokerArgs {
 	tlsSecretName?: string;
 	rootNamespace?: string;
 	brokerUsername?: string;
+	nodeSelector?: Record<string, string>;
+	tolerations?: k8s.types.input.core.v1.Toleration[];
 	dependsOn?: pulumi.Input<pulumi.Resource>[];
 }
 
@@ -250,6 +252,12 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 					template: {
 						metadata: { labels, annotations: podAnnotations },
 						spec: {
+							...(args.nodeSelector
+								? { nodeSelector: args.nodeSelector }
+								: {}),
+							...(args.tolerations
+								? { tolerations: args.tolerations }
+								: {}),
 							securityContext: {
 								runAsNonRoot: true,
 								runAsUser: 65532,

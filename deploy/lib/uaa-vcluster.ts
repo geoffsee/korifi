@@ -22,6 +22,11 @@ import * as random from "@pulumi/random";
 import * as tls from "@pulumi/tls";
 import { versions } from "./versions";
 import type { UaaCerts } from "./uaa-certs";
+import {
+	mergeDeep,
+	type NodePlacement,
+	vclusterSchedulingValues,
+} from "./node-placement";
 
 /** Kind NodePort / hostPort for the UAA TLS proxy. */
 export const kindUaaNodePort = 30443 as const;
@@ -34,6 +39,10 @@ export interface UaaVclusterArgs {
 	certs: UaaCerts;
 	/** Kind cluster name (kubeconfig at ~/.kube/kind-<name>.config). */
 	kindClusterName: string;
+	/** Override host kubeconfig path (k0s writes ~/.kube/k0s-<name>.config). */
+	kubeconfigPath?: string;
+	/** Pin the vcluster StatefulSet and synced pods (k0s node roles). */
+	hostScheduling?: NodePlacement;
 	/** Public UAA base URL (issuer.uri / experimental.uaa.url). */
 	uaaUrl?: string;
 	namespace?: string;
@@ -114,6 +123,30 @@ export class UaaVcluster extends pulumi.ComponentResource {
 			{ parent: this },
 		);
 
+		const vclusterValues: Record<string, unknown> = {
+			exportKubeConfig: {
+				// Reachable via the host port-forward below (not in-pod localhost).
+				server: `https://127.0.0.1:${kindVclusterLocalApiPort}`,
+				secret: { name: `vc-${vclusterName}` },
+			},
+			networking: {
+				replicateServices: {
+					toHost: [
+						{
+							from: "default/uaa",
+							to: hostUaaService,
+						},
+					],
+				},
+			},
+		};
+		if (args.hostScheduling) {
+			mergeDeep(
+				vclusterValues,
+				vclusterSchedulingValues(args.hostScheduling),
+			);
+		}
+
 		this.vclusterRelease = new k8s.helm.v3.Release(
 			`${name}-vcluster`,
 			{
@@ -122,23 +155,7 @@ export class UaaVcluster extends pulumi.ComponentResource {
 				version: versions.vclusterChart,
 				repositoryOpts: { repo: "https://charts.loft.sh" },
 				namespace: this.namespace,
-				values: {
-					exportKubeConfig: {
-						// Reachable via the host port-forward below (not in-pod localhost).
-						server: `https://127.0.0.1:${kindVclusterLocalApiPort}`,
-						secret: { name: `vc-${vclusterName}` },
-					},
-					networking: {
-						replicateServices: {
-							toHost: [
-								{
-									from: "default/uaa",
-									to: hostUaaService,
-								},
-							],
-						},
-					},
-				},
+				values: vclusterValues,
 				timeout: 900,
 			},
 			{
@@ -148,7 +165,9 @@ export class UaaVcluster extends pulumi.ComponentResource {
 			},
 		);
 
-		const hostKubeconfig = `$HOME/.kube/kind-${args.kindClusterName}.config`;
+		const hostKubeconfig =
+			args.kubeconfigPath ??
+			`$HOME/.kube/kind-${args.kindClusterName}.config`;
 		const pfPidFile = path.join(
 			os.tmpdir(),
 			`korifi-vcluster-${vclusterName}-pf.pid`,

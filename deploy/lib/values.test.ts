@@ -11,6 +11,9 @@ import {
 	kindGatewayPorts,
 	kindKpackBuilderRepository,
 	kindRegistryPrefix,
+	k0sGatewayPorts,
+	k0sKpackBuilderRepository,
+	k0sRegistryPrefix,
 } from "./values";
 import { korifiChartUrl, versions } from "./versions";
 
@@ -73,6 +76,32 @@ describe("buildKorifiValues", () => {
 		expect(values.migration).toEqual({
 			image: "korifi-migration:kind-abc",
 			imagePullPolicy: "IfNotPresent",
+		});
+	});
+
+	test("k0s uses the same local-cluster Helm defaults as kind", () => {
+		const values = buildKorifiValues({
+			platform: "k0s",
+			adminUserName: "uaa:admin@korifi.local",
+			apiUrl: "localhost",
+			appDomain: "apps-127-0-0-1.nip.io",
+			containerRepositoryPrefix: k0sRegistryPrefix(),
+			kpackBuilderRepository: k0sKpackBuilderRepository(),
+			networking: { gatewayPorts: k0sGatewayPorts },
+			uaaUrl: "https://127.0.0.1:30443/uaa",
+		});
+
+		expect(values.logLevel).toBe("debug");
+		expect(values.knativeRunner).toEqual({ include: true });
+		expect(values.reconcilers).toEqual({ run: "knative-runner" });
+		expect(values.experimental).toEqual({
+			managedServices: { enabled: true, trustInsecureBrokers: true },
+			uaa: { enabled: true, url: "https://127.0.0.1:30443/uaa" },
+		});
+		expect(values.networking).toEqual({
+			gatewayClass: "contour",
+			gatewayNamespace: "korifi-gateway",
+			gatewayPorts: { http: 32080, https: 32443 },
 		});
 	});
 
@@ -220,5 +249,6 @@ describe("versions", () => {
 		expect(versions.opensearchOperatorChart).toBe("2.8.0");
 		expect(versions.vclusterChart).toMatch(/^\d+\.\d+\.\d+$/);
 		expect(versions.uaaImage).toContain("cfidentity/uaa");
+		expect(versions.k0sImage).toContain("k0sproject/k0s");
 	});
 });

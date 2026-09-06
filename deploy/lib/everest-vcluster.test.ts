@@ -14,7 +14,7 @@ test("Everest vcluster installs OpenEverest and required monitoring CRDs", () =>
 	expect(text).toContain('chart: "openeverest"');
 	expect(text).toContain("dependsOn: [systemNs, monitoringCrds]");
 	expect(text).toContain("kindEverestVclusterLocalApiPort");
-	expect(text).toContain("command.local.runOutput");
+	expect(text).toContain("refreshVclusterForwardIfReachable");
 	expect(text).toContain("apiForwardReady.stdout");
 	expect(text).toContain("postgresql: true");
 	expect(text).toContain("pxc: true");

@@ -15,6 +15,8 @@ export interface LocalRegistryArgs {
 	username?: string;
 	namespace?: pulumi.Input<string>;
 	nodePort?: number;
+	nodeSelector?: Record<string, string>;
+	tolerations?: k8s.types.input.core.v1.Toleration[];
 	dependsOn?: pulumi.Input<pulumi.Resource>[];
 }
 
@@ -59,6 +61,12 @@ export class LocalRegistry extends pulumi.ComponentResource {
 					secrets: {
 						htpasswd: pulumi.interpolate`${this.username}:${password.bcryptHash}`,
 					},
+					...(args.nodeSelector
+						? { nodeSelector: args.nodeSelector }
+						: {}),
+					...(args.tolerations
+						? { tolerations: args.tolerations }
+						: {}),
 				},
 			},
 			{

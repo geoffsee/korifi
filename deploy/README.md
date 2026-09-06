@@ -5,6 +5,7 @@ TypeScript Pulumi programs that automate the platform install guides:
 | Stack | Guide | Cluster |
 | --- | --- | --- |
 | [`kind/`](./kind) | [INSTALL.kind.md](../INSTALL.kind.md) | kind (local Docker) |
+| [`k0s/`](./k0s) | [deploy/k0s/README.md](./k0s/README.md) | 3-node k0s in Docker (korifi / osb / knative) |
 | [`eks/`](./eks) | [INSTALL.EKS.md](../INSTALL.EKS.md) | Amazon EKS + ECR |
 | [`gke/`](./gke) | [INSTALL.md](../INSTALL.md) on GKE | GKE + Artifact Registry |
 

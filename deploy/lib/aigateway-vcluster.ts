@@ -13,6 +13,12 @@ import * as pulumi from "@pulumi/pulumi";
 import * as random from "@pulumi/random";
 import * as tls from "@pulumi/tls";
 import { versions } from "./versions";
+import { refreshVclusterForwardIfReachable } from "./host-kube-api";
+import {
+	mergeDeep,
+	type NodePlacement,
+	vclusterSchedulingValues,
+} from "./node-placement";
 
 /** Host port for `kubectl port-forward` to the AI Gateway vcluster API. */
 export const kindAIGatewayVclusterLocalApiPort = 18445 as const;
@@ -31,6 +37,8 @@ export interface AIGatewayBackend {
 export interface AIGatewayVclusterArgs {
 	provider: k8s.Provider;
 	kindClusterName: string;
+	kubeconfigPath?: string;
+	hostScheduling?: NodePlacement;
 	backends: AIGatewayBackend[];
 	dependsOn?: pulumi.Input<pulumi.Resource>[];
 }
@@ -192,6 +200,24 @@ export class AIGatewayVcluster extends pulumi.ComponentResource {
 			childOpts,
 		);
 
+		const vclusterValues: Record<string, unknown> = {
+			exportKubeConfig: {
+				server: `https://${vclusterName}.${this.namespace}`,
+				secret: { name: `vc-${vclusterName}` },
+			},
+			sync: {
+				toHost: {
+					services: { enabled: true },
+				},
+			},
+		};
+		if (args.hostScheduling) {
+			mergeDeep(
+				vclusterValues,
+				vclusterSchedulingValues(args.hostScheduling),
+			);
+		}
+
 		const vclusterRelease = new k8s.helm.v3.Release(
 			`${name}-vcluster`,
 			{
@@ -200,17 +226,7 @@ export class AIGatewayVcluster extends pulumi.ComponentResource {
 				version: versions.vclusterChart,
 				repositoryOpts: { repo: "https://charts.loft.sh" },
 				namespace: this.namespace,
-				values: {
-					exportKubeConfig: {
-						server: `https://${vclusterName}.${this.namespace}`,
-						secret: { name: `vc-${vclusterName}` },
-					},
-					sync: {
-						toHost: {
-							services: { enabled: true },
-						},
-					},
-				},
+				values: vclusterValues,
 				timeout: 900,
 			},
 			{
@@ -220,7 +236,9 @@ export class AIGatewayVcluster extends pulumi.ComponentResource {
 			},
 		);
 
-		const hostKubeconfig = `$HOME/.kube/kind-${args.kindClusterName}.config`;
+		const hostKubeconfig =
+			args.kubeconfigPath ??
+			`$HOME/.kube/kind-${args.kindClusterName}.config`;
 		const pfPidFile = path.join(
 			os.tmpdir(),
 			`korifi-vcluster-${vclusterName}-pf.pid`,
@@ -266,20 +284,24 @@ fi
 		// Command resources only run when their inputs change. Re-check the
 		// process on every preview/update so a canceled Pulumi process or host
 		// restart cannot leave the virtual provider pointed at a dead forward.
-		const apiForwardReady = command.local.runOutput(
-			{
-				command: aigwVclusterForwardScript({
-					hostKubeconfig,
-					namespace: this.namespace,
-					svc: vclusterName,
-					pidFile: pfPidFile,
-					logFile: pfLogFile,
-					port: apiPort,
-					mode: "update",
-				}),
-			},
-			{ parent: this, dependsOn: [apiForward] },
-		);
+		// Skip the invoke when the host API is down — otherwise a first-up
+		// preview runs kubectl against 127.0.0.1:6443 and fails serialization.
+		const apiForwardReady = refreshVclusterForwardIfReachable({
+			hostKubeconfig,
+			namespace: this.namespace,
+			service: vclusterName,
+			script: aigwVclusterForwardScript({
+				hostKubeconfig,
+				namespace: this.namespace,
+				svc: vclusterName,
+				pidFile: pfPidFile,
+				logFile: pfLogFile,
+				port: apiPort,
+				mode: "update",
+			}),
+			parent: this,
+			dependsOn: [apiForward],
+		});
 
 		const kubeconfigCmd = new command.local.Command(
 			`${name}-kubeconfig`,
