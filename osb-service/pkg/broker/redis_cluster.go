@@ -141,6 +141,7 @@ dir /data
 		return nil, err
 	}
 	creds := redisCredentials(host, 6379, password)
+	creds["ca_cert"] = string(tls.CertPEM)
 	creds["cluster"] = name
 	creds["instance_id"] = instanceID
 	creds["engine"] = "redis"
