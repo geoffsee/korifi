@@ -60,3 +60,23 @@ func TestCredentialsUseEngineDefaultDatabase(t *testing.T) {
 		})
 	}
 }
+
+func TestEverestEngineResources(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		engine everestEngine
+		cpu    string
+		memory string
+	}{
+		{name: "postgres", engine: postgresEngine, cpu: "250m", memory: "512Mi"},
+		{name: "mysql", engine: mysqlEngine, cpu: "500m", memory: "1Gi"},
+		{name: "mongodb", engine: mongoEngine, cpu: "500m", memory: "1Gi"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resources := tc.engine.resources()
+			if resources["cpu"] != tc.cpu || resources["memory"] != tc.memory {
+				t.Fatalf("resources = %#v, want cpu=%s memory=%s", resources, tc.cpu, tc.memory)
+			}
+		})
+	}
+}

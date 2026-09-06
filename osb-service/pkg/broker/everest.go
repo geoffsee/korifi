@@ -33,6 +33,8 @@ type everestEngine struct {
 	// DefaultDatabase is used when the operator connection Secret omits a
 	// logical database name. An empty value uses the cluster name.
 	DefaultDatabase string
+	CPU             string
+	Memory          string
 	// Service is the in-vcluster Service name suffix used when status.hostname
 	// is empty. Host DNS is rewritten to the vcluster-synced Service.
 	Service string
@@ -45,16 +47,23 @@ var (
 	postgresEngine = everestEngine{
 		Type: "postgresql", ProxyType: "pgbouncer", Version: "17.10",
 		DefaultPort: 5432, DefaultDatabase: "postgres", Service: "primary", Prefix: "p",
+		CPU: "250m", Memory: "512Mi",
 	}
 	mysqlEngine = everestEngine{
 		Type: "pxc", ProxyType: "haproxy", Version: "8.0.39-30.1",
 		DefaultPort: 3306, DefaultDatabase: "mysql", Service: "haproxy", Prefix: "x", MaxNameLength: 22,
+		CPU: "500m", Memory: "1Gi",
 	}
 	mongoEngine = everestEngine{
 		Type: "psmdb", Version: "8.0.12-4",
 		DefaultPort: 27017, Service: "rs0", Prefix: "m",
+		CPU: "500m", Memory: "1Gi",
 	}
 )
+
+func (e everestEngine) resources() map[string]any {
+	return map[string]any{"cpu": e.CPU, "memory": e.Memory}
+}
 
 type everestClient struct {
 	dyn          dynamic.Interface
@@ -100,13 +109,10 @@ func (c *everestClient) provision(ctx context.Context, instanceID string, eng ev
 		return nil, err
 	}
 	engineSpec := map[string]any{
-		"type":     eng.Type,
-		"replicas": 1,
-		"storage":  map[string]any{"size": "2Gi"},
-		"resources": map[string]any{
-			"cpu":    "250m",
-			"memory": "512Mi",
-		},
+		"type":      eng.Type,
+		"replicas":  1,
+		"storage":   map[string]any{"size": "2Gi"},
+		"resources": eng.resources(),
 	}
 	if eng.Version != "" {
 		engineSpec["version"] = eng.Version
