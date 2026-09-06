@@ -126,6 +126,17 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 			{ length: 24, special: false },
 			{ parent: this },
 		);
+		const data = new k8s.core.v1.PersistentVolumeClaim(
+			`${name}-data`,
+			{
+				metadata: { name: `${appName}-data`, namespace: this.namespace.metadata.name },
+				spec: {
+					accessModes: ["ReadWriteOnce"],
+					resources: { requests: { storage: "1Gi" } },
+				},
+			},
+			{ ...child, dependsOn: [this.namespace] },
+		);
 
 		const stringData: Record<string, pulumi.Input<string>> = {
 			BROKER_USERNAME: username,
@@ -159,6 +170,7 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 				metadata: { name: appName, namespace: this.namespace.metadata.name },
 				spec: {
 					replicas: 1,
+					strategy: { type: "Recreate" },
 					selector: { matchLabels: labels },
 					template: {
 						metadata: { labels },
@@ -182,6 +194,8 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 										"/var/run/osb-service/tls.crt",
 										"--tls-private-key-file",
 										"/var/run/osb-service/tls.key",
+										"--store-path",
+										"/var/lib/osb-service/store.json",
 									],
 									envFrom: [{ secretRef: { name: secret.metadata.name } }],
 									ports: [{ containerPort: 8443, name: "https" }],
@@ -211,10 +225,18 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 											mountPath: "/var/run/osb-service",
 											readOnly: true,
 										},
+										{
+											name: "data",
+											mountPath: "/var/lib/osb-service",
+										},
 									],
 								},
 							],
 							volumes: [
+								{
+									name: "data",
+									persistentVolumeClaim: { claimName: data.metadata.name },
+								},
 								{
 									name: "tls",
 									secret: {
@@ -234,6 +256,7 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 				...child,
 				dependsOn: [
 					this.namespace,
+					data,
 					secret,
 					...certResources,
 					...backendResources,

@@ -29,6 +29,13 @@ type postgresOffering struct {
 
 func newDefaultOfferings(o Options) (store, []Offering, error) {
 	st := store(newMemoryBackend())
+	if o.StorePath != "" {
+		fileStore, err := newFileBackend(o.StorePath)
+		if err != nil {
+			return nil, nil, err
+		}
+		st = fileStore
+	}
 	var pool *pgxpool.Pool
 	if o.PostgresHost != "" {
 		p, err := connectAdminPool(context.Background(), o)

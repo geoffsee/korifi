@@ -11,6 +11,7 @@ import (
 // AddFlags.
 type Options struct {
 	Async            bool
+	StorePath        string
 	PostgresHost     string
 	PostgresPort     int
 	PostgresUser     string
@@ -25,6 +26,7 @@ type Options struct {
 // parse is called.
 func AddFlags(o *Options) {
 	flag.BoolVar(&o.Async, "async", false, "Indicates whether the broker is handling the requests asynchronously.")
+	flag.StringVar(&o.StorePath, "store-path", os.Getenv("STORE_PATH"), "Path to a durable local OSB metadata store. Empty keeps the in-memory store.")
 	flag.StringVar(&o.PostgresHost, "postgres-host", os.Getenv("POSTGRES_HOST"), "Admin host for the postgres offering (and durable OSB metadata). Empty keeps the in-memory store.")
 	flag.IntVar(&o.PostgresPort, "postgres-port", envInt("POSTGRES_PORT", 5432), "Postgres port")
 	flag.StringVar(&o.PostgresUser, "postgres-user", envDefault("POSTGRES_USER", "postgres"), "Postgres admin user")
