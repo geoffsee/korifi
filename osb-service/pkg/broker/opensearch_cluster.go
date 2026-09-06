@@ -41,12 +41,28 @@ func (c *vclusterClient) provisionOpenSearch(ctx context.Context, instanceID str
 		return nil, fmt.Errorf("create opensearch admin secret: %w", err)
 	}
 
-	obj := &unstructured.Unstructured{Object: map[string]any{
+	obj := openSearchCluster(name, c.namespace, ls)
+	if _, err := c.dyn.Resource(openSearchGVR).Namespace(c.namespace).Create(ctx, obj, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return nil, fmt.Errorf("create OpenSearchCluster: %w", err)
+	}
+	if err := c.waitSTS(ctx, name+"-nodes"); err != nil {
+		return nil, err
+	}
+	host := c.syncedHost(name, name, name)
+	creds := openSearchCredentials(host, 9200, user, password)
+	creds["cluster"] = name
+	creds["instance_id"] = instanceID
+	creds["engine"] = "opensearch"
+	return creds, nil
+}
+
+func openSearchCluster(name, namespace string, ls map[string]string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "opensearch.opster.io/v1",
 		"kind":       "OpenSearchCluster",
 		"metadata": map[string]any{
 			"name":      name,
-			"namespace": c.namespace,
+			"namespace": namespace,
 			"labels":    ls,
 		},
 		"spec": map[string]any{
@@ -55,7 +71,11 @@ func (c *vclusterClient) provisionOpenSearch(ctx context.Context, instanceID str
 				"version":     openSearchVersion,
 				"httpPort":    9200,
 			},
-			"dashboards": map[string]any{"enable": false},
+			"dashboards": map[string]any{
+				"enable":   false,
+				"replicas": int64(0),
+				"version":  openSearchVersion,
+			},
 			"security": map[string]any{
 				"config": map[string]any{
 					"adminCredentialsSecret": map[string]any{"name": name + "-admin"},
@@ -78,18 +98,6 @@ func (c *vclusterClient) provisionOpenSearch(ctx context.Context, instanceID str
 			},
 		},
 	}}
-	if _, err := c.dyn.Resource(openSearchGVR).Namespace(c.namespace).Create(ctx, obj, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
-		return nil, fmt.Errorf("create OpenSearchCluster: %w", err)
-	}
-	if err := c.waitSTS(ctx, name+"-nodes"); err != nil {
-		return nil, err
-	}
-	host := c.syncedHost(name, name, name)
-	creds := openSearchCredentials(host, 9200, user, password)
-	creds["cluster"] = name
-	creds["instance_id"] = instanceID
-	creds["engine"] = "opensearch"
-	return creds, nil
 }
 
 func (c *vclusterClient) deprovisionOpenSearch(ctx context.Context, name string) error {
