@@ -170,7 +170,10 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 				metadata: { name: appName, namespace: this.namespace.metadata.name },
 				spec: {
 					replicas: 1,
-					strategy: { type: "Recreate" },
+					strategy: {
+						type: "RollingUpdate",
+						rollingUpdate: { maxSurge: 0, maxUnavailable: 1 },
+					},
 					selector: { matchLabels: labels },
 					template: {
 						metadata: { labels },

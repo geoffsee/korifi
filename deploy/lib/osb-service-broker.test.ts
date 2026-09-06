@@ -19,7 +19,7 @@ test("osb-service broker serves HTTPS and registers CFServiceBroker", () => {
 	expect(text).toContain("cert-manager.io/v1");
 	expect(text).toContain("CFServiceBroker");
 	expect(text).toContain("PersistentVolumeClaim");
-	expect(text).toContain('strategy: { type: "Recreate" }');
+	expect(text).toContain("rollingUpdate: { maxSurge: 0, maxUnavailable: 1 }");
 	expect(text).toContain("--store-path");
 	expect(text).toContain(osbServiceBrokerGuid);
 	expect(text).not.toContain("--insecure");
