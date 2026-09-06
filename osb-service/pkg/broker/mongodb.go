@@ -93,8 +93,10 @@ func mongoCredentials(host string, port int, dbname, username, password string) 
 		Host:   net.JoinHostPort(host, strconv.Itoa(port)),
 		Path:   "/" + dbname,
 		RawQuery: url.Values{
-			"tls":        []string{"true"},
-			"authSource": []string{"admin"},
+			"tls":                      []string{"true"},
+			"authSource":               []string{"admin"},
+			"directConnection":         []string{"true"},
+			"tlsAllowInvalidHostnames": []string{"true"},
 		}.Encode(),
 	}
 	return map[string]any{

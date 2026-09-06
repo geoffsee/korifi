@@ -36,6 +36,11 @@ type everestEngine struct {
 	DefaultUsername string
 	CPU             string
 	Memory          string
+	// TLSSecretSuffix identifies the operator-managed Secret containing the
+	// database CA. Engines that require a client certificate also expose the
+	// certificate and key from this Secret in the service binding.
+	TLSSecretSuffix  string
+	IncludeClientTLS bool
 	// Service is the in-vcluster Service name suffix used when status.hostname
 	// is empty. Host DNS is rewritten to the vcluster-synced Service.
 	Service string
@@ -48,17 +53,17 @@ var (
 	postgresEngine = everestEngine{
 		Type: "postgresql", ProxyType: "pgbouncer", Version: "17.10",
 		DefaultPort: 5432, DefaultDatabase: "postgres", Service: "primary", Prefix: "p",
-		CPU: "250m", Memory: "512Mi",
+		CPU: "250m", Memory: "512Mi", TLSSecretSuffix: "-cluster-cert",
 	}
 	mysqlEngine = everestEngine{
 		Type: "pxc", ProxyType: "haproxy", Version: "8.0.39-30.1",
 		DefaultPort: 3306, DefaultDatabase: "mysql", Service: "haproxy", Prefix: "x", MaxNameLength: 22,
-		DefaultUsername: "root", CPU: "500m", Memory: "1Gi",
+		DefaultUsername: "root", CPU: "500m", Memory: "1Gi", TLSSecretSuffix: "-ssl",
 	}
 	mongoEngine = everestEngine{
 		Type: "psmdb", Version: "8.0.12-4",
 		DefaultPort: 27017, Service: "rs0", Prefix: "m",
-		CPU: "500m", Memory: "1Gi",
+		CPU: "500m", Memory: "1Gi", TLSSecretSuffix: "-ssl", IncludeClientTLS: true,
 	}
 )
 
@@ -153,7 +158,11 @@ func (c *everestClient) provision(ctx context.Context, instanceID string, eng ev
 	if err != nil {
 		return nil, err
 	}
-	return c.credentialsFromSecret(eng, name, secret, statusHost, statusPort), nil
+	tlsSecret, err := c.waitTLSSecret(ctx, name, eng)
+	if err != nil {
+		return nil, err
+	}
+	return c.credentialsFromSecret(eng, name, secret, tlsSecret, statusHost, statusPort), nil
 }
 
 func (c *everestClient) waitReady(ctx context.Context, name string) error {
@@ -232,6 +241,33 @@ func secretHasPassword(sec *corev1.Secret) bool {
 	return false
 }
 
+func (c *everestClient) waitTLSSecret(ctx context.Context, name string, eng everestEngine) (*corev1.Secret, error) {
+	secretName := name + eng.TLSSecretSuffix
+	deadline := time.Now().Add(10 * time.Minute)
+	for time.Now().Before(deadline) {
+		sec, err := c.core.CoreV1().Secrets(c.namespace).Get(ctx, secretName, metav1.GetOptions{})
+		if err == nil && tlsSecretReady(sec, eng.IncludeClientTLS) {
+			return sec, nil
+		}
+		if err != nil && !apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("get OpenEverest TLS secret %s: %w", secretName, err)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
+	return nil, fmt.Errorf("timed out waiting for OpenEverest TLS secret %s", secretName)
+}
+
+func tlsSecretReady(sec *corev1.Secret, requireClientTLS bool) bool {
+	if len(sec.Data["ca.crt"]) == 0 {
+		return false
+	}
+	return !requireClientTLS || len(sec.Data["tls.crt"]) > 0 && len(sec.Data["tls.key"]) > 0
+}
+
 func (c *everestClient) clusterEndpoint(ctx context.Context, name string) (string, int64) {
 	obj, err := c.dyn.Resource(databaseClusterGVR).Namespace(c.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -250,7 +286,7 @@ func (c *everestClient) syncedHost(inClusterHost, cluster, svcSuffix string) str
 	return fmt.Sprintf("%s-%s-x-%s.%s.svc.cluster.local", svc, c.namespace, c.vclusterName, c.hostNS)
 }
 
-func (c *everestClient) credentialsFromSecret(eng everestEngine, cluster string, sec *corev1.Secret, statusHost string, statusPort int64) map[string]any {
+func (c *everestClient) credentialsFromSecret(eng everestEngine, cluster string, sec, tlsSecret *corev1.Secret, statusHost string, statusPort int64) map[string]any {
 	get := func(keys ...string) string {
 		for _, k := range keys {
 			if v := sec.Data[k]; len(v) > 0 {
@@ -291,5 +327,15 @@ func (c *everestClient) credentialsFromSecret(eng everestEngine, cluster string,
 	}
 	creds["cluster"] = cluster
 	creds["engine"] = eng.Type
+	creds["ca_cert"] = string(tlsSecret.Data["ca.crt"])
+	tlsServerName := statusHost
+	if tlsServerName == "" {
+		tlsServerName = fmt.Sprintf("%s-%s.%s.svc.cluster.local", cluster, eng.Service, c.namespace)
+	}
+	creds["tls_server_name"] = tlsServerName
+	if eng.IncludeClientTLS {
+		creds["tls_cert"] = string(tlsSecret.Data["tls.crt"])
+		creds["tls_key"] = string(tlsSecret.Data["tls.key"])
+	}
 	return creds
 }
