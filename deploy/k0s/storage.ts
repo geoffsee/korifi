@@ -40,8 +40,13 @@ export class K0sLocalPathStorage extends pulumi.ComponentResource {
 				rules: [
 					{
 						apiGroups: [""],
-						resources: ["nodes", "persistentvolumeclaims", "configmaps", "pods", "pods/log"],
+						resources: ["nodes", "persistentvolumeclaims", "configmaps", "pods/log"],
 						verbs: ["get", "list", "watch"],
+					},
+					{
+						apiGroups: [""],
+						resources: ["pods"],
+						verbs: ["get", "list", "watch", "create", "patch", "update", "delete"],
 					},
 					{
 						apiGroups: [""],

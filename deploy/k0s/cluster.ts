@@ -278,6 +278,7 @@ sha256sum "$TOKEN_FILE" | awk '{print $1}'
 					`done`,
 					`ready=$(docker exec "$KORIFI" k0s kubectl get nodes --no-headers | awk '$2=="Ready"' | wc -l | tr -d ' ')`,
 					`[ "$ready" = "3" ]`,
+					`docker exec "$KORIFI" k0s kubectl taint nodes "$KORIFI" node-role.kubernetes.io/control-plane:NoSchedule- || true`,
 					`mkdir -p "$(dirname "$KUBECONFIG_OUT")"`,
 					`docker exec "$KORIFI" k0s kubeconfig admin | awk 'BEGIN{done=0} { if (!done && $1=="server:") { sub(/https:\\/\\/[^[:space:]]+/, "https://127.0.0.1:6443"); done=1 } print }' > "$KUBECONFIG_OUT"`,
 					`for NODE in "$KORIFI" "$OSB" "$KNATIVE"; do`,

@@ -32,5 +32,10 @@ test("resolves an image ref from manifest.tsv to a tarball", () => {
 	fs.writeFileSync(tar, "stub");
 	expect(tarPathForImage(dir, "docker.io/library/registry:3.0.0")).toBe(tar);
 	expect(tarPathForImage(dir, "docker.io/missing:tag")).toBeUndefined();
+	const unlisted = path.join(dir, "tars", "mirror.gcr.io_library_alpine_3.20.tar");
+	fs.writeFileSync(unlisted, "stub");
+	expect(tarPathForImage(dir, "mirror.gcr.io/library/alpine:3.20")).toBe(
+		unlisted,
+	);
 	fs.rmSync(dir, { recursive: true, force: true });
 });

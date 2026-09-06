@@ -31,6 +31,8 @@ describe("k0s image prefetch manifests", () => {
 		expect(script).toContain("k0s ctr images import");
 		expect(script).toContain("KORIFI_IMAGE_ARCHIVES");
 		expect(script).toContain("manifest.tsv");
+		expect(script).toContain("file=${image//\\//_}");
+		expect(script).toContain("wait_for_ctr");
 		expect(script).not.toContain("k0s ctr images pull");
 	});
 });

@@ -97,6 +97,23 @@ for node in "${nodes[@]}"; do
 	fi
 done
 
+wait_for_ctr() {
+	local node=$1
+	local i
+	for i in $(seq 1 60); do
+		if docker exec "$node" k0s ctr images ls >/dev/null 2>&1; then
+			return 0
+		fi
+		sleep 2
+	done
+	echo "timed out waiting for containerd on $node" >&2
+	return 1
+}
+
+for node in "${nodes[@]}"; do
+	wait_for_ctr "$node"
+done
+
 images=()
 while IFS= read -r image; do
 	[[ -n $image ]] && images+=("$image")
@@ -112,6 +129,12 @@ tar_for_image() {
 	local file
 	file=$(awk -F'\t' -v img="$image" 'NR > 1 && $2 == img { print $1; exit }' "$manifest")
 	if [[ -z $file ]]; then
+		# Tarballs may exist on disk before they are listed in manifest.tsv.
+		file=${image//\//_}
+		file=${file//:/_}
+		file=${file//@/_}.tar
+	fi
+	if [[ ! -f $tars/$file ]]; then
 		return 1
 	fi
 	printf '%s/%s\n' "$tars" "$file"

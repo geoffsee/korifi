@@ -10,3 +10,4 @@ tests/assets/sample-broker/sample-broker
 deploy/**/node_modules/
 deploy/**/bin/
 /deploy/kind/Pulumi.dev.yaml
+/deploy/k0s/Pulumi.dev.yaml

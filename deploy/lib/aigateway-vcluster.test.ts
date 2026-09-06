@@ -15,7 +15,7 @@ const text = fs.readFileSync(
 test("AI Gateway vcluster routes declared models to external OpenAI-compatible backends", () => {
 	expect(text).toContain('chart: "vcluster"');
 	expect(text).toContain("kindAIGatewayVclusterLocalApiPort");
-	expect(text).toContain("command.local.runOutput");
+	expect(text).toContain("refreshVclusterForwardIfReachable");
 	expect(text).toContain("apiForwardReady.stdout");
 	expect(text).not.toContain("${this.namespace}.svc");
 	expect(text).toContain("envoyproxy/gateway-helm");

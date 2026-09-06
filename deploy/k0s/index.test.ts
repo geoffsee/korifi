@@ -53,6 +53,8 @@ test("k0s stack composes shared lib components", () => {
 	expect(all).toContain("osbServicePath");
 	expect(all).toContain("osb-service");
 	expect(all).toContain("K0sLocalPathStorage");
+	expect(all).toContain('resources: ["pods"]');
+	expect(all).toContain("control-plane:NoSchedule-");
 	expect(all).toContain("K0sPlatformPlacement");
 	expect(all).toContain("everest: brokerServices.everest");
 	expect(all).toContain("aigateway: brokerServices.aigateway");

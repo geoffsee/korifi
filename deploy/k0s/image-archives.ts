@@ -26,23 +26,31 @@ export function imageArchivesManifestPath(archivesDir: string): string {
 	return path.join(archivesDir, "manifest.tsv");
 }
 
-/** Filename in `tars/` for an image ref, if present in manifest.tsv. */
+/** docker-save filename convention used by image-archives (`/` `:` `@` → `_`). */
+export function tarFileNameForImageRef(imageRef: string): string {
+	return `${imageRef.replace(/[/:@]/g, "_")}.tar`;
+}
+
+/** Filename in `tars/` for an image ref, if present in manifest.tsv or on disk. */
 export function tarNameForImage(
 	archivesDir: string,
 	imageRef: string,
 ): string | undefined {
 	const manifestPath = imageArchivesManifestPath(archivesDir);
-	if (!fs.existsSync(manifestPath)) {
-		return undefined;
+	if (fs.existsSync(manifestPath)) {
+		for (const line of fs.readFileSync(manifestPath, "utf8").split("\n")) {
+			if (line === "" || line.startsWith("image_file")) {
+				continue;
+			}
+			const [file, ref] = line.split("\t");
+			if (file && ref === imageRef) {
+				return file;
+			}
+		}
 	}
-	for (const line of fs.readFileSync(manifestPath, "utf8").split("\n")) {
-		if (line === "" || line.startsWith("image_file")) {
-			continue;
-		}
-		const [file, ref] = line.split("\t");
-		if (file && ref === imageRef) {
-			return file;
-		}
+	const fallback = tarFileNameForImageRef(imageRef);
+	if (fs.existsSync(path.join(archivesDir, "tars", fallback))) {
+		return fallback;
 	}
 	return undefined;
 }

@@ -13,6 +13,7 @@ import * as command from "@pulumi/command";
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
 import { versions } from "./versions";
+import { refreshVclusterForwardIfReachable } from "./host-kube-api";
 import {
 	mergeDeep,
 	type NodePlacement,
@@ -147,20 +148,24 @@ fi
 		// Command resources only run when their inputs change. Re-check the
 		// process on every preview/update so a canceled Pulumi process or host
 		// restart cannot leave the virtual provider pointed at a dead forward.
-		const apiForwardReady = command.local.runOutput(
-			{
-				command: vclusterForwardScript({
-					hostKubeconfig,
-					namespace: this.namespace,
-					svc: vclusterName,
-					pidFile: pfPidFile,
-					logFile: pfLogFile,
-					port: apiPort,
-					mode: "update",
-				}),
-			},
-			{ parent: this, dependsOn: [apiForward] },
-		);
+		// Skip the invoke when the host API is down — otherwise a first-up
+		// preview runs kubectl against 127.0.0.1:6443 and fails serialization.
+		const apiForwardReady = refreshVclusterForwardIfReachable({
+			hostKubeconfig,
+			namespace: this.namespace,
+			service: vclusterName,
+			script: vclusterForwardScript({
+				hostKubeconfig,
+				namespace: this.namespace,
+				svc: vclusterName,
+				pidFile: pfPidFile,
+				logFile: pfLogFile,
+				port: apiPort,
+				mode: "update",
+			}),
+			parent: this,
+			dependsOn: [apiForward],
+		});
 
 		const kubeconfigCmd = new command.local.Command(
 			`${name}-kubeconfig`,
