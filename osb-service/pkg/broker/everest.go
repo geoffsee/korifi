@@ -172,7 +172,7 @@ func (c *everestClient) credentialsFromSecret(cluster string, sec *corev1.Secret
 	pass := get("password")
 	db := get("dbname", "database")
 	if db == "" {
-		db = cluster
+		db = "postgres"
 	}
 	port := 5432
 	if p := get("port"); p != "" {
