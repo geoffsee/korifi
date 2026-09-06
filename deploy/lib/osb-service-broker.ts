@@ -143,6 +143,7 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 			BROKER_PASSWORD: password.result,
 		};
 		const backendResources: pulumi.Resource[] = [];
+		const podAnnotations: Record<string, pulumi.Input<string>> = {};
 		const everest = args.backends.everest;
 		const extraVolumeMounts: k8s.types.input.core.v1.VolumeMount[] = [];
 		const extraVolumes: k8s.types.input.core.v1.Volume[] = [];
@@ -167,19 +168,20 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 		}
 
 		if (everest) {
-			backendResources.push(
-				new k8s.core.v1.Secret(
-					`${name}-everest-kubeconfig`,
-					{
-						metadata: {
-							name: "everest-kubeconfig",
-							namespace: this.namespace.metadata.name,
-						},
-						stringData: { kubeconfig: everest.kubeconfig },
+			const everestKubeconfigSecret = new k8s.core.v1.Secret(
+				`${name}-everest-kubeconfig`,
+				{
+					metadata: {
+						name: "everest-kubeconfig",
+						namespace: this.namespace.metadata.name,
 					},
-					{ ...child, dependsOn: [this.namespace] },
-				),
+					stringData: { kubeconfig: everest.kubeconfig },
+				},
+				{ ...child, dependsOn: [this.namespace] },
 			);
+			backendResources.push(everestKubeconfigSecret);
+			podAnnotations["korifi.cloudfoundry.org/everest-kubeconfig-version"] =
+				everestKubeconfigSecret.metadata.resourceVersion;
 		}
 
 		const secret = new k8s.core.v1.Secret(
@@ -204,7 +206,7 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 					},
 					selector: { matchLabels: labels },
 					template: {
-						metadata: { labels },
+						metadata: { labels, annotations: podAnnotations },
 						spec: {
 							securityContext: {
 								runAsNonRoot: true,
