@@ -15,6 +15,7 @@ import (
 const (
 	aiGatewayServiceName      = "aigw"
 	aiGatewayServiceNamespace = "envoy-gateway-system"
+	aiGatewayTLSSecretName    = "aigw-tls"
 	aiGatewayPolicyName       = "aigw-clients"
 )
 
@@ -28,6 +29,14 @@ func (c *vclusterClient) provisionAIGatewayTenant(ctx context.Context, instanceI
 	name, err := resourceName("t", instanceID)
 	if err != nil {
 		return nil, err
+	}
+	gatewayTLS, err := c.core.CoreV1().Secrets(c.namespace).Get(ctx, aiGatewayTLSSecretName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get AI Gateway TLS secret: %w", err)
+	}
+	caCert := gatewayTLS.Data["ca.crt"]
+	if len(caCert) == 0 {
+		return nil, fmt.Errorf("AI Gateway TLS secret %s is missing ca.crt", aiGatewayTLSSecretName)
 	}
 	apiKey, err := randomPassword(32)
 	if err != nil {
@@ -47,6 +56,7 @@ func (c *vclusterClient) provisionAIGatewayTenant(ctx context.Context, instanceI
 	}
 	host := c.syncedHostInNamespace(aiGatewayServiceName, aiGatewayServiceNamespace, "", "")
 	creds := aiGatewayCredentials(host, 443, apiKey)
+	creds["ca_cert"] = string(caCert)
 	creds["instance_id"] = instanceID
 	creds["engine"] = "aigateway"
 	return creds, nil
