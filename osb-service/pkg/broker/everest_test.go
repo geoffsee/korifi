@@ -33,9 +33,11 @@ func TestDatabaseClusterReady(t *testing.T) {
 
 func TestCredentialsUseEngineDefaultDatabase(t *testing.T) {
 	client := &everestClient{
-		namespace:    "everest",
-		hostNS:       "everest-vcluster",
-		vclusterName: "everest",
+		vclusterClient: &vclusterClient{
+			namespace:    "everest",
+			hostNS:       "everest-vcluster",
+			vclusterName: "everest",
+		},
 	}
 	secret := &corev1.Secret{Data: map[string][]byte{
 		"user":     []byte("database-user"),
@@ -89,9 +91,11 @@ func TestEverestEngineResources(t *testing.T) {
 
 func TestMySQLCredentialsUseRootUsername(t *testing.T) {
 	client := &everestClient{
-		namespace:    "everest",
-		hostNS:       "everest-vcluster",
-		vclusterName: "everest",
+		vclusterClient: &vclusterClient{
+			namespace:    "everest",
+			hostNS:       "everest-vcluster",
+			vclusterName: "everest",
+		},
 	}
 	secret := &corev1.Secret{Data: map[string][]byte{
 		"root": []byte("root-password"),
@@ -112,9 +116,11 @@ func TestMySQLCredentialsUseRootUsername(t *testing.T) {
 
 func TestEverestTLSCredentials(t *testing.T) {
 	client := &everestClient{
-		namespace:    "everest",
-		hostNS:       "everest-vcluster",
-		vclusterName: "everest",
+		vclusterClient: &vclusterClient{
+			namespace:    "everest",
+			hostNS:       "everest-vcluster",
+			vclusterName: "everest",
+		},
 	}
 	userSecret := &corev1.Secret{Data: map[string][]byte{
 		"MONGODB_DATABASE_ADMIN_USER":     []byte("database-user"),

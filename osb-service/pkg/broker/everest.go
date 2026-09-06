@@ -253,14 +253,6 @@ func (c *everestClient) clusterEndpoint(ctx context.Context, name string) (strin
 	return host, port
 }
 
-func (c *everestClient) syncedHost(inClusterHost, cluster, svcSuffix string) string {
-	svc := cluster + "-" + svcSuffix
-	if inClusterHost != "" {
-		svc = strings.Split(inClusterHost, ".")[0]
-	}
-	return fmt.Sprintf("%s-%s-x-%s.%s.svc.cluster.local", svc, c.namespace, c.vclusterName, c.hostNS)
-}
-
 func (c *everestClient) credentialsFromSecret(eng everestEngine, cluster string, sec, tlsSecret *corev1.Secret, statusHost string, statusPort int64) map[string]any {
 	get := func(keys ...string) string {
 		for _, k := range keys {
