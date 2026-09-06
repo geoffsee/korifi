@@ -19,6 +19,7 @@ test("Everest vcluster installs OpenEverest and required monitoring CRDs", () =>
 	expect(text).toContain("postgresql");
 	expect(text).toContain("inClusterKubeconfig");
 	expect(text).toContain("everest-vcluster");
+	expect(text).not.toContain("${this.namespace}.svc");
 	expect(text).not.toContain("kind: \"DatabaseCluster\"");
 	expect(text).not.toContain("kind: DatabaseCluster");
 });

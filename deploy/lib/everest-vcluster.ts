@@ -66,7 +66,7 @@ export class EverestVcluster extends pulumi.ComponentResource {
 				namespace: this.namespace,
 				values: {
 					exportKubeConfig: {
-						server: `https://${vclusterName}.${this.namespace}.svc`,
+						server: `https://${vclusterName}.${this.namespace}`,
 						secret: { name: `vc-${vclusterName}` },
 					},
 					sync: {
@@ -183,7 +183,7 @@ exit 1
 		this.inClusterKubeconfig = kubeconfigCmd.stdout.apply((raw) =>
 			raw.replace(
 				/server:\s*https?:\/\/[^\s]+/,
-				`server: https://${vclusterName}.${this.namespace}.svc`,
+				`server: https://${vclusterName}.${this.namespace}`,
 			),
 		);
 
