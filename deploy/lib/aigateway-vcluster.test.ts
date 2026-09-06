@@ -16,6 +16,7 @@ test("AI Gateway vcluster routes declared models to external OpenAI-compatible b
 	expect(text).toContain("kindAIGatewayVclusterLocalApiPort");
 	expect(text).toContain("command.local.runOutput");
 	expect(text).toContain("apiForwardReady.stdout");
+	expect(text).not.toContain("${this.namespace}.svc");
 	expect(text).toContain("envoyproxy/gateway-helm");
 	expect(text).toContain("envoyproxy/ai-gateway-helm");
 	expect(text).toContain("envoyGatewayChart");
