@@ -210,6 +210,7 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 										},
 										initialDelaySeconds: 3,
 										periodSeconds: 5,
+										timeoutSeconds: 10,
 									},
 									securityContext: {
 										allowPrivilegeEscalation: false,

@@ -15,6 +15,7 @@ test("osb-service broker serves HTTPS and registers CFServiceBroker", () => {
 	expect(text).toContain("--tls-cert-file");
 	expect(text).toContain("--tls-private-key-file");
 	expect(text).toContain('scheme: "HTTPS"');
+	expect(text).toContain("timeoutSeconds: 10");
 	expect(text).toContain("https://${fqdn}");
 	expect(text).toContain("cert-manager.io/v1");
 	expect(text).toContain("CFServiceBroker");
