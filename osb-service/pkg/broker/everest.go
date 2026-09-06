@@ -90,7 +90,7 @@ func (c *everestClient) provision(ctx context.Context, instanceID string) (map[s
 			"proxy": map[string]any{
 				"type":     "pgbouncer",
 				"replicas": 1,
-				"expose":   map[string]any{"type": "internal"},
+				"expose":   map[string]any{"type": "ClusterIP"},
 			},
 		},
 	}}
@@ -98,11 +98,38 @@ func (c *everestClient) provision(ctx context.Context, instanceID string) (map[s
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return nil, fmt.Errorf("create DatabaseCluster: %w", err)
 	}
+	if err := c.waitReady(ctx, name); err != nil {
+		return nil, err
+	}
 	secret, err := c.waitUserSecret(ctx, name)
 	if err != nil {
 		return nil, err
 	}
 	return c.credentialsFromSecret(name, secret), nil
+}
+
+func (c *everestClient) waitReady(ctx context.Context, name string) error {
+	deadline := time.Now().Add(10 * time.Minute)
+	for time.Now().Before(deadline) {
+		cluster, err := c.dyn.Resource(databaseClusterGVR).Namespace(c.namespace).Get(ctx, name, metav1.GetOptions{})
+		if err == nil && databaseClusterReady(cluster) {
+			return nil
+		}
+		if err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("get OpenEverest DatabaseCluster %s: %w", name, err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
+	return fmt.Errorf("timed out waiting for OpenEverest DatabaseCluster %s to become ready", name)
+}
+
+func databaseClusterReady(cluster *unstructured.Unstructured) bool {
+	status, found, err := unstructured.NestedString(cluster.Object, "status", "status")
+	return err == nil && found && status == "ready"
 }
 
 func (c *everestClient) deprovision(ctx context.Context, name string) error {
