@@ -210,19 +210,20 @@ export class OsbServiceBroker extends pulumi.ComponentResource {
 					items: [{ key: "kubeconfig", path: "kubeconfig" }],
 				},
 			});
-			backendResources.push(
-				new k8s.core.v1.Secret(
-					`${name}-aigateway-kubeconfig`,
-					{
-						metadata: {
-							name: "aigateway-kubeconfig",
-							namespace: this.namespace.metadata.name,
-						},
-						stringData: { kubeconfig: aigateway.kubeconfig },
+			const aigatewayKubeconfigSecret = new k8s.core.v1.Secret(
+				`${name}-aigateway-kubeconfig`,
+				{
+					metadata: {
+						name: "aigateway-kubeconfig",
+						namespace: this.namespace.metadata.name,
 					},
-					{ ...child, dependsOn: [this.namespace] },
-				),
+					stringData: { kubeconfig: aigateway.kubeconfig },
+				},
+				{ ...child, dependsOn: [this.namespace] },
 			);
+			backendResources.push(aigatewayKubeconfigSecret);
+			podAnnotations["korifi.cloudfoundry.org/aigateway-kubeconfig-version"] =
+				aigatewayKubeconfigSecret.metadata.resourceVersion;
 		}
 
 		const secret = new k8s.core.v1.Secret(
