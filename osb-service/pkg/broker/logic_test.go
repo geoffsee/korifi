@@ -297,6 +297,11 @@ func TestSyncedHost(t *testing.T) {
 	if got != want {
 		t.Fatalf("status host: got %q want %q", got, want)
 	}
+	got = c.syncedHostInNamespace("aigw", "envoy-gateway-system", "", "")
+	want = "aigw-x-envoy-gateway-system-x-everest.everest-vcluster.svc.cluster.local"
+	if got != want {
+		t.Fatalf("explicit namespace: got %q want %q", got, want)
+	}
 }
 
 func TestResourceName(t *testing.T) {

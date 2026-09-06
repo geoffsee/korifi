@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	aiGatewayServiceName = "aigw"
-	aiGatewayPolicyName  = "aigw-clients"
+	aiGatewayServiceName      = "aigw"
+	aiGatewayServiceNamespace = "envoy-gateway-system"
+	aiGatewayPolicyName       = "aigw-clients"
 )
 
 var securityPolicyGVR = schema.GroupVersionResource{
@@ -44,7 +45,7 @@ func (c *vclusterClient) provisionAIGatewayTenant(ctx context.Context, instanceI
 	if err := c.patchAPIKeyCredential(ctx, name, true); err != nil {
 		return nil, err
 	}
-	host := c.syncedHost(aiGatewayServiceName, "", "")
+	host := c.syncedHostInNamespace(aiGatewayServiceName, aiGatewayServiceNamespace, "", "")
 	creds := aiGatewayCredentials(host, 443, apiKey)
 	creds["instance_id"] = instanceID
 	creds["engine"] = "aigateway"

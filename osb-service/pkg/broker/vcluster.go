@@ -55,11 +55,15 @@ func kubeconfigClient(kubeconfig, namespace, hostNS, vclusterName string) (*vclu
 }
 
 func (c *vclusterClient) syncedHost(inClusterHost, cluster, svcSuffix string) string {
+	return c.syncedHostInNamespace(inClusterHost, c.namespace, cluster, svcSuffix)
+}
+
+func (c *vclusterClient) syncedHostInNamespace(inClusterHost, namespace, cluster, svcSuffix string) string {
 	svc := cluster + "-" + svcSuffix
 	if inClusterHost != "" {
 		svc = strings.Split(inClusterHost, ".")[0]
 	}
-	return fmt.Sprintf("%s-x-%s-x-%s.%s.svc.cluster.local", svc, c.namespace, c.vclusterName, c.hostNS)
+	return fmt.Sprintf("%s-x-%s-x-%s.%s.svc.cluster.local", svc, namespace, c.vclusterName, c.hostNS)
 }
 
 func instanceLabels(instanceID, offering string) map[string]string {
