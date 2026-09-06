@@ -19,9 +19,12 @@ export interface KorifiDependenciesArgs {
 	 * When "EKS", skips create-new-user.sh (IRSA / IAM admin is provisioned
 	 * outside the Job). Use "GKE" or omit for clusters that need cf-admin.
 	 */
-	clusterType?: "EKS" | "GKE" | "kind";
-	/** kind / minikube need insecure metrics-server TLS args. */
+	clusterType?: "EKS" | "GKE" | "kind" | "k0s";
+	/** kind / minikube / k0s need insecure metrics-server TLS args. */
 	insecureTlsMetricsServer?: boolean;
+	/** Pin the installer Job (k0s korifi node is NoSchedule-tainted). */
+	nodeSelector?: Record<string, string>;
+	tolerations?: k8s.types.input.core.v1.Toleration[];
 	/** Optional Calico CNI (deploy-on-kind.sh); kind installer YAML omits it. */
 	installVendoredCalico?: boolean;
 	installerImage?: string;
@@ -112,6 +115,12 @@ export class KorifiDependencies extends pulumi.ComponentResource {
 						spec: {
 							serviceAccountName: this.serviceAccount.metadata.name,
 							restartPolicy: "Never",
+							...(args.nodeSelector
+								? { nodeSelector: args.nodeSelector }
+								: {}),
+							...(args.tolerations
+								? { tolerations: args.tolerations }
+								: {}),
 							containers: [
 								{
 									name: "install-dependencies",

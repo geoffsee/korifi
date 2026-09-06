@@ -5,7 +5,7 @@
  * unit-testable without a cluster or Pulumi engine.
  */
 
-export type KorifiPlatform = "kind" | "eks" | "gke";
+export type KorifiPlatform = "kind" | "k0s" | "eks" | "gke";
 
 export interface KorifiNetworkingInput {
 	gatewayClass?: string;
@@ -79,7 +79,7 @@ export function buildKorifiValues(
 		values.logLevel = input.logLevel;
 	}
 
-	if (input.platform === "kind") {
+	if (input.platform === "kind" || input.platform === "k0s") {
 		values.logLevel = input.logLevel ?? "debug";
 		values.stagingRequirements = { buildCacheMB: 1024 };
 		values.controllers = { taskTTL: "5s" };
@@ -161,6 +161,18 @@ export function kindRegistryPrefix(): string {
 
 export function kindKpackBuilderRepository(): string {
 	return `${kindRegistry.clusterHost}/kpack-builder`;
+}
+
+/** Same NodePorts as kind; k0s publishes them on the korifi controller container. */
+export const k0sGatewayPorts = kindGatewayPorts;
+export const k0sRegistry = kindRegistry;
+
+export function k0sRegistryPrefix(): string {
+	return kindRegistryPrefix();
+}
+
+export function k0sKpackBuilderRepository(): string {
+	return kindKpackBuilderRepository();
 }
 
 /** ECR repository prefix: `<account>.dkr.ecr.<region>.amazonaws.com/<cluster>/`. */

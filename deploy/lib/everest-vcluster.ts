@@ -13,6 +13,11 @@ import * as command from "@pulumi/command";
 import * as k8s from "@pulumi/kubernetes";
 import * as pulumi from "@pulumi/pulumi";
 import { versions } from "./versions";
+import {
+	mergeDeep,
+	type NodePlacement,
+	vclusterSchedulingValues,
+} from "./node-placement";
 
 /** Host port for `kubectl port-forward` to the Everest vcluster API. */
 export const kindEverestVclusterLocalApiPort = 18444 as const;
@@ -20,6 +25,8 @@ export const kindEverestVclusterLocalApiPort = 18444 as const;
 export interface EverestVclusterArgs {
 	provider: k8s.Provider;
 	kindClusterName: string;
+	kubeconfigPath?: string;
+	hostScheduling?: NodePlacement;
 	dependsOn?: pulumi.Input<pulumi.Resource>[];
 }
 
@@ -56,6 +63,24 @@ export class EverestVcluster extends pulumi.ComponentResource {
 			childOpts,
 		);
 
+		const vclusterValues: Record<string, unknown> = {
+			exportKubeConfig: {
+				server: `https://${vclusterName}.${this.namespace}`,
+				secret: { name: `vc-${vclusterName}` },
+			},
+			sync: {
+				toHost: {
+					services: { enabled: true },
+				},
+			},
+		};
+		if (args.hostScheduling) {
+			mergeDeep(
+				vclusterValues,
+				vclusterSchedulingValues(args.hostScheduling),
+			);
+		}
+
 		const vclusterRelease = new k8s.helm.v3.Release(
 			`${name}-vcluster`,
 			{
@@ -64,17 +89,7 @@ export class EverestVcluster extends pulumi.ComponentResource {
 				version: versions.vclusterChart,
 				repositoryOpts: { repo: "https://charts.loft.sh" },
 				namespace: this.namespace,
-				values: {
-					exportKubeConfig: {
-						server: `https://${vclusterName}.${this.namespace}`,
-						secret: { name: `vc-${vclusterName}` },
-					},
-					sync: {
-						toHost: {
-							services: { enabled: true },
-						},
-					},
-				},
+				values: vclusterValues,
 				timeout: 900,
 			},
 			{
@@ -84,7 +99,9 @@ export class EverestVcluster extends pulumi.ComponentResource {
 			},
 		);
 
-		const hostKubeconfig = `$HOME/.kube/kind-${args.kindClusterName}.config`;
+		const hostKubeconfig =
+			args.kubeconfigPath ??
+			`$HOME/.kube/kind-${args.kindClusterName}.config`;
 		const pfPidFile = path.join(
 			os.tmpdir(),
 			`korifi-vcluster-${vclusterName}-pf.pid`,

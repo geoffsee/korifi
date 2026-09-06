@@ -131,6 +131,8 @@ networking:
 migration:
   include: true
   image: cloudfoundry/korifi-migration:latest
+  nodeSelector: {}
+  tolerations: []
 
 experimental:
   routing:

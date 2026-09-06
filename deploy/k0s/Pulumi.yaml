@@ -1,0 +1,10 @@
+name: korifi-k0s
+description: "Install Korifi on a 3-node k0s-in-docker cluster via Pulumi"
+runtime:
+  name: nodejs
+  options:
+    packagemanager: bun
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: typescript

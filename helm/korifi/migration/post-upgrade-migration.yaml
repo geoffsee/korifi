@@ -25,6 +25,14 @@ spec:
     spec:
       serviceAccountName: korifi-controllers-controller-manager
       restartPolicy: Never
+{{- if .Values.migration.nodeSelector }}
+      nodeSelector:
+      {{ toYaml .Values.migration.nodeSelector | indent 8 }}
+{{- end }}
+{{- if .Values.migration.tolerations }}
+      tolerations:
+      {{- toYaml .Values.migration.tolerations | nindent 8 }}
+{{- end }}
       {{- include "korifi.podSecurityContext" . | indent 6 }}
       containers:
       - name: post-upgrade-migration

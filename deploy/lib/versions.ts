@@ -30,6 +30,8 @@ export const versions = {
 	aiGatewayChart: "v1.1.0",
 	/** Official UAA image (cfidentity/uaa). */
 	uaaImage: "docker.io/cfidentity/uaa:v79.7.0",
+	/** k0s OCI image (Docker Hub tag uses `-` instead of `+`). */
+	k0sImage: "docker.io/k0sproject/k0s:v1.36.4-k0s.0",
 } as const;
 
 /** Cert CN / SAN hostname for the UAA TLS proxy (IP SANs include 127.0.0.1). */

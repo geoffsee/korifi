@@ -16,6 +16,9 @@ export interface ContourGatewayArgs {
 	publishType: ContourPublishType;
 	/** Namespace that owns the ContourDeployment params object. */
 	contourNamespace?: string;
+	/** Pin Contour/Envoy (k0s korifi node). */
+	nodeSelector?: Record<string, string>;
+	tolerations?: k8s.types.input.core.v1.Toleration[];
 	dependsOn?: pulumi.Input<pulumi.Resource>[];
 }
 
@@ -58,8 +61,34 @@ export class ContourGateway extends pulumi.ComponentResource {
 						namespace: contourNs,
 					},
 					spec: {
+						...(args.nodeSelector || args.tolerations
+							? {
+									contour: {
+										nodePlacement: {
+											...(args.nodeSelector
+												? { nodeSelector: args.nodeSelector }
+												: {}),
+											...(args.tolerations
+												? { tolerations: args.tolerations }
+												: {}),
+										},
+									},
+								}
+							: {}),
 						envoy: {
 							networkPublishing: { type: "NodePortService" },
+							...(args.nodeSelector || args.tolerations
+								? {
+										nodePlacement: {
+											...(args.nodeSelector
+												? { nodeSelector: args.nodeSelector }
+												: {}),
+											...(args.tolerations
+												? { tolerations: args.tolerations }
+												: {}),
+										},
+									}
+								: {}),
 						},
 					},
 				},
