@@ -150,6 +150,7 @@ authorization {
 		return nil, err
 	}
 	creds := natsCredentials(host, 4222, user, password)
+	creds["ca_cert"] = string(tls.CertPEM)
 	creds["cluster"] = name
 	creds["instance_id"] = instanceID
 	creds["engine"] = "nats"
