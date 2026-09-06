@@ -33,6 +33,7 @@ type everestEngine struct {
 	// DefaultDatabase is used when the operator connection Secret omits a
 	// logical database name. An empty value uses the cluster name.
 	DefaultDatabase string
+	DefaultUsername string
 	CPU             string
 	Memory          string
 	// Service is the in-vcluster Service name suffix used when status.hostname
@@ -52,7 +53,7 @@ var (
 	mysqlEngine = everestEngine{
 		Type: "pxc", ProxyType: "haproxy", Version: "8.0.39-30.1",
 		DefaultPort: 3306, DefaultDatabase: "mysql", Service: "haproxy", Prefix: "x", MaxNameLength: 22,
-		CPU: "500m", Memory: "1Gi",
+		DefaultUsername: "root", CPU: "500m", Memory: "1Gi",
 	}
 	mongoEngine = everestEngine{
 		Type: "psmdb", Version: "8.0.12-4",
@@ -258,7 +259,10 @@ func (c *everestClient) credentialsFromSecret(eng everestEngine, cluster string,
 		}
 		return ""
 	}
-	user := get("user", "username", "root", "MONGODB_DATABASE_ADMIN_USER")
+	user := get("user", "username", "MONGODB_DATABASE_ADMIN_USER")
+	if user == "" {
+		user = eng.DefaultUsername
+	}
 	pass := get("password", "root", "MONGODB_DATABASE_ADMIN_PASSWORD")
 	db := get("dbname", "database")
 	if db == "" {

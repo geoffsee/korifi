@@ -80,3 +80,23 @@ func TestEverestEngineResources(t *testing.T) {
 		})
 	}
 }
+
+func TestMySQLCredentialsUseRootUsername(t *testing.T) {
+	client := &everestClient{
+		namespace:    "everest",
+		hostNS:       "everest-vcluster",
+		vclusterName: "everest",
+	}
+	secret := &corev1.Secret{Data: map[string][]byte{
+		"root": []byte("root-password"),
+	}}
+
+	credentials := client.credentialsFromSecret(mysqlEngine, "xcluster", secret, "", 0)
+
+	if got := credentials["username"]; got != "root" {
+		t.Fatalf("username = %q, want root", got)
+	}
+	if got := credentials["password"]; got != "root-password" {
+		t.Fatalf("password = %q, want root-password", got)
+	}
+}
