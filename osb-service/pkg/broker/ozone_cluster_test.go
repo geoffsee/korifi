@@ -1,9 +1,12 @@
 package broker
 
 import (
+	"context"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestOzoneComponentsUsePortsAvailableWithHTTPSOnly(t *testing.T) {
@@ -33,5 +36,21 @@ func TestOzoneTCPProbesGateReadinessAndAllowSlowStartup(t *testing.T) {
 	}
 	if startup.PeriodSeconds*startup.FailureThreshold < 300 {
 		t.Fatalf("startup allowance = %ds, want at least 300s", startup.PeriodSeconds*startup.FailureThreshold)
+	}
+}
+
+func TestOzoneHeadlessServicesPublishAddressesBeforePodsAreReady(t *testing.T) {
+	client := &vclusterClient{core: fake.NewSimpleClientset(), namespace: "everest"}
+	labels := map[string]string{"osb.korifi/cluster": "test"}
+
+	if err := client.createHeadlessService(context.Background(), "test-om", "om", 9862, labels); err != nil {
+		t.Fatalf("create OM service: %v", err)
+	}
+	service, err := client.core.CoreV1().Services("everest").Get(context.Background(), "test-om", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get OM service: %v", err)
+	}
+	if !service.Spec.PublishNotReadyAddresses {
+		t.Fatal("headless service must publish not-ready addresses so StatefulSet pods can resolve their own hostnames during startup")
 	}
 }

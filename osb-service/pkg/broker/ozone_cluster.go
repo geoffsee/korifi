@@ -188,8 +188,9 @@ func (c *vclusterClient) createHeadlessService(ctx context.Context, name, compon
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: c.namespace, Labels: svcLabels},
 		Spec: corev1.ServiceSpec{
-			ClusterIP: corev1.ClusterIPNone,
-			Selector:  map[string]string{"osb.korifi/cluster": ls["osb.korifi/cluster"], "component": component},
+			ClusterIP:                corev1.ClusterIPNone,
+			PublishNotReadyAddresses: component != "s3g",
+			Selector:                 map[string]string{"osb.korifi/cluster": ls["osb.korifi/cluster"], "component": component},
 			Ports: []corev1.ServicePort{{
 				Name: "rpc", Port: port, TargetPort: intstr.FromInt32(port),
 			}},
