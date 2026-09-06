@@ -63,14 +63,15 @@ func run() error {
 		handler = basicAuth(o.username, o.password, handler)
 	}
 	// Provisioning currently performs its backend readiness check before it
-	// returns the OSB async response. Everest allows that check ten minutes, so
-	// the server must not truncate the response first.
+	// returns the OSB async response. Dedicated services can need up to twenty
+	// minutes on a cold cluster, so the server must not truncate the response
+	// first.
 	srv := &http.Server{
 		Addr:              ":" + strconv.Itoa(o.port),
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      11 * time.Minute,
+		WriteTimeout:      21 * time.Minute,
 		IdleTimeout:       2 * time.Minute,
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
