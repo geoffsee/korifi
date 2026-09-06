@@ -80,7 +80,7 @@ func (c *everestClient) provision(ctx context.Context, instanceID string) (map[s
 			"engine": map[string]any{
 				"type":     "postgresql",
 				"replicas": 1,
-				"version":  "17.4",
+				"version":  "17.10",
 				"storage":  map[string]any{"size": "2Gi"},
 				"resources": map[string]any{
 					"cpu":    "250m",
