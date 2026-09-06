@@ -7,11 +7,11 @@ const text = fs.readFileSync(
 	"utf8",
 );
 
-test("Everest vcluster installs OpenEverest operators only", () => {
+test("Everest vcluster installs OpenEverest and required monitoring CRDs", () => {
 	expect(text).toContain('chart: "vcluster"');
+	expect(text).toContain('chart: "victoria-metrics-operator-crds"');
 	expect(text).toContain('chart: "openeverest"');
-	expect(text).toContain("dependsOn: [systemNs]");
-	expect(text).not.toContain('chart: "victoria-metrics-operator-crds"');
+	expect(text).toContain("dependsOn: [systemNs, monitoringCrds]");
 	expect(text).toContain("kindEverestVclusterLocalApiPort");
 	expect(text).toContain("command.local.runOutput");
 	expect(text).toContain("apiForwardReady.stdout");
