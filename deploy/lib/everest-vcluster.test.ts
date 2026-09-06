@@ -10,6 +10,7 @@ const text = fs.readFileSync(
 test("Everest vcluster installs OpenEverest and required monitoring CRDs", () => {
 	expect(text).toContain('chart: "vcluster"');
 	expect(text).toContain('chart: "victoria-metrics-operator-crds"');
+	expect(text).toContain("skipCrds: true");
 	expect(text).toContain('chart: "openeverest"');
 	expect(text).toContain("dependsOn: [systemNs, monitoringCrds]");
 	expect(text).toContain("kindEverestVclusterLocalApiPort");

@@ -220,6 +220,9 @@ exit 1
 					repo: "https://victoriametrics.github.io/helm-charts",
 				},
 				namespace: "everest-system",
+				// This CRD-only chart also renders managed copies of its bootstrap
+				// CRDs. Skip the unmanaged copies so the release can own the CRDs.
+				skipCrds: true,
 				timeout: 300,
 			},
 			{
