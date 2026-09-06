@@ -42,6 +42,19 @@ pulumi up --stack dev
 
 Prerequisites: Docker, [kind](https://kind.sigs.k8s.io/), `pulumi`, `kubectl`,
 `cf` CLI v8+. First `pulumi up` compiles the Korifi Go images (a few minutes).
+It also downloads the declared external images in parallel and caches them
+directly in every Kind node before the corresponding deployment phase. This
+preserves upstream names and digests, so Kubernetes uses the cache without a
+registry mirror or rewritten manifests.
+
+To refresh the complete cache independently of Pulumi for an existing cluster:
+
+```sh
+./prefetch-images.sh --cluster korifi
+```
+
+Use `--jobs N` to control download concurrency or `--images FILE` to load a
+custom newline-delimited manifest. Re-running the script skips cached images.
 
 Afterwards:
 

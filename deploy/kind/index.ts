@@ -47,6 +47,7 @@ import {
 } from "@korifi/deploy-lib";
 import { KindCluster } from "./cluster";
 import { KindEverestOperatorBundles } from "./everest-operator-bundles";
+import { KindImagePrefetch } from "./image-prefetch";
 import {
 	adminEmail,
 	aiGatewayBackends,
@@ -82,6 +83,12 @@ const cluster = new KindCluster(
 	{ dependsOn: [certs.filesReady] },
 );
 
+const prefetchedImages = new KindImagePrefetch(
+	"external-images",
+	{ clusterName, dependsOn: [cluster] },
+	{ dependsOn: [cluster] },
+);
+
 const namespaces = new KorifiNamespaces(
 	"ns",
 	{ provider: cluster.provider, installerNamespace: true },
@@ -93,9 +100,9 @@ const registry = new LocalRegistry(
 	{
 		provider: cluster.provider,
 		username: registryUser,
-		dependsOn: [namespaces],
+		dependsOn: [namespaces, prefetchedImages.coreLoaded],
 	},
-	{ dependsOn: [namespaces] },
+	{ dependsOn: [namespaces, prefetchedImages.coreLoaded] },
 );
 
 const cfPullSecret = registry.pullSecret(
@@ -137,9 +144,9 @@ const dependencies = new KorifiDependencies(
 		insecureTlsMetricsServer: true,
 		installerImage: pinned.installerImage,
 		installerNamespace: namespaces.installer!.metadata.name,
-		dependsOn: [namespaces.installer!],
+		dependsOn: [namespaces.installer!, prefetchedImages.coreLoaded],
 	},
-	{ dependsOn: [namespaces] },
+	{ dependsOn: [namespaces, prefetchedImages.coreLoaded] },
 );
 
 const uaa = new UaaVcluster(
@@ -244,9 +251,9 @@ const everestOperatorBundles = new KindEverestOperatorBundles(
 	"everest-operator-bundles",
 	{
 		clusterName,
-		dependsOn: [cluster],
+		dependsOn: [cluster, prefetchedImages.servicesLoaded],
 	},
-	{ dependsOn: [cluster] },
+	{ dependsOn: [cluster, prefetchedImages.servicesLoaded] },
 );
 
 const brokerServices = new ServiceBrokerServices(
