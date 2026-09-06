@@ -24,6 +24,8 @@ test("kind stack composes shared lib components", () => {
 	expect(all).toContain("LocalRegistry");
 	expect(all).toContain("ContourGateway");
 	expect(all).toContain("ServiceBrokerServices");
+	expect(all).toContain("KindEverestOperatorBundles");
+	expect(all).toContain("everestOperatorBundles.loaded");
 	expect(all).toContain("UaaCerts");
 	expect(all).toContain("UaaVcluster");
 	expect(all).toContain("KnativeServing");
@@ -33,6 +35,8 @@ test("kind stack composes shared lib components", () => {
 	expect(all).toContain("osb-service");
 	expect(all).toContain("everest: brokerServices.everest");
 	expect(all).toContain("postgres dedicated");
+	expect(all).toContain("enable-service-access mysql");
+	expect(all).toContain("enable-service-access mongodb");
 	expect(all).not.toContain("PostgresServiceBroker");
 	expect(all).not.toContain("--insecure");
 	expect(all).not.toContain('sslMode: "disable"');

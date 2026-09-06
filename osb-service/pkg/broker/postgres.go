@@ -43,7 +43,11 @@ func newDefaultOfferings(o Options) (store, []Offering, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return st, []Offering{newPostgresOffering(o, everest)}, nil
+	return st, []Offering{
+		newPostgresOffering(o, everest),
+		newMySQLOffering(o, everest),
+		newMongoOffering(o, everest),
+	}, nil
 }
 
 func newPostgresOffering(o Options, everest *everestClient) *postgresOffering {
@@ -83,7 +87,7 @@ func (p *postgresOffering) Healthy(ctx context.Context) error {
 
 func (p *postgresOffering) Provision(id string, req ProvisionRequest) (instance, error) {
 	if p.everest != nil {
-		creds, err := p.everest.provision(context.Background(), id)
+		creds, err := p.everest.provision(context.Background(), id, postgresEngine)
 		if err != nil {
 			return instance{}, err
 		}

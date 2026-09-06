@@ -12,6 +12,7 @@
  *   KorifiRelease            Korifi Helm chart (knative-runner, experimental.uaa)
  *   KnativeServing           Operator Helm + KnativeServing CR (Kourier ClusterIP)
  *   ContourGateway           NodePort GatewayClass params
+ *   KindEverestOperatorBundles preload OLM bundles into kind's runtime
  *   ServiceBrokerServices    OpenEverest (vcluster) + shared Postgres
  *   KindOsbBrokerImage       docker build + kind load osb-service
  *   OsbServiceBroker         HTTPS OSB broker + CFServiceBroker registration
@@ -45,6 +46,7 @@ import {
 	kindUaaNodePort,
 } from "@korifi/deploy-lib";
 import { KindCluster } from "./cluster";
+import { KindEverestOperatorBundles } from "./everest-operator-bundles";
 import {
 	adminEmail,
 	apiUrl,
@@ -237,15 +239,24 @@ const gateway = new ContourGateway(
 	{ dependsOn: [korifi] },
 );
 
+const everestOperatorBundles = new KindEverestOperatorBundles(
+	"everest-operator-bundles",
+	{
+		clusterName,
+		dependsOn: [cluster],
+	},
+	{ dependsOn: [cluster] },
+);
+
 const brokerServices = new ServiceBrokerServices(
 	"broker-services",
 	{
 		provider: cluster.provider,
 		kindClusterName: clusterName,
 		enable: { postgres: true },
-		dependsOn: [korifi.release],
+		dependsOn: [korifi.release, everestOperatorBundles.loaded],
 	},
-	{ dependsOn: [korifi] },
+	{ dependsOn: [korifi, everestOperatorBundles] },
 );
 
 const osbImage = new KindOsbBrokerImage(
@@ -299,4 +310,4 @@ export const everest = brokerServices.everest
 export const osbBrokerUrl = osbBroker.url;
 export const osbServiceImage = osbImage.image;
 export const marketplaceHint =
-	"cf enable-service-access postgres && cf marketplace && cf create-service postgres dedicated mydb";
+	"cf enable-service-access postgres && cf enable-service-access mysql && cf enable-service-access mongodb && cf marketplace && cf create-service postgres dedicated mydb";

@@ -27,14 +27,20 @@ func TestProvisionConflict(t *testing.T) {
 	}
 }
 
-func TestCatalogIsPostgres(t *testing.T) {
+func TestCatalogDedicatedEngines(t *testing.T) {
 	b, err := NewBusinessLogic(Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	c := b.Catalog()
-	if len(c.Services) != 1 || c.Services[0].Name != "postgres" || c.Services[0].Plans[0].Name != "dedicated" {
+	if len(c.Services) != 3 {
 		t.Fatalf("unexpected catalog: %#v", c)
+	}
+	want := []string{"mongodb", "mysql", "postgres"}
+	for i, name := range want {
+		if c.Services[i].Name != name || c.Services[i].Plans[0].Name != "dedicated" {
+			t.Fatalf("service %d: %#v", i, c.Services[i])
+		}
 	}
 }
 
@@ -66,6 +72,76 @@ func TestBindCredentials(t *testing.T) {
 	}
 }
 
+func TestBindMySQLCredentials(t *testing.T) {
+	b, err := NewBusinessLogic(Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	_, status, err := b.Provision(id, ProvisionRequest{ServiceID: MySQLServiceID, PlanID: MySQLPlanID})
+	if err != nil || status != http.StatusCreated {
+		t.Fatalf("provision: %d %v", status, err)
+	}
+	resp, status, err := b.Bind(id, "bbbbbbbb-cccc-dddd-eeee-ffffffffffff", BindRequest{ServiceID: MySQLServiceID, PlanID: MySQLPlanID})
+	if err != nil || status != http.StatusCreated {
+		t.Fatalf("bind: %d %v", status, err)
+	}
+	for _, key := range []string{"uri", "jdbcUrl", "username", "password", "hostname", "database", "sslmode"} {
+		if resp.Credentials[key] == nil || resp.Credentials[key] == "" {
+			t.Fatalf("missing credential %q: %#v", key, resp.Credentials)
+		}
+	}
+	if resp.Credentials["sslmode"] != "REQUIRED" {
+		t.Fatalf("sslmode: got %#v", resp.Credentials["sslmode"])
+	}
+	uri, _ := resp.Credentials["uri"].(string)
+	if !strings.Contains(uri, "ssl-mode=REQUIRED") {
+		t.Fatalf("uri missing ssl-mode=REQUIRED: %s", uri)
+	}
+}
+
+func TestBindMongoCredentials(t *testing.T) {
+	b, err := NewBusinessLogic(Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	_, status, err := b.Provision(id, ProvisionRequest{ServiceID: MongoServiceID, PlanID: MongoPlanID})
+	if err != nil || status != http.StatusCreated {
+		t.Fatalf("provision: %d %v", status, err)
+	}
+	resp, status, err := b.Bind(id, "bbbbbbbb-cccc-dddd-eeee-ffffffffffff", BindRequest{ServiceID: MongoServiceID, PlanID: MongoPlanID})
+	if err != nil || status != http.StatusCreated {
+		t.Fatalf("bind: %d %v", status, err)
+	}
+	for _, key := range []string{"uri", "username", "password", "hostname", "database"} {
+		if resp.Credentials[key] == nil || resp.Credentials[key] == "" {
+			t.Fatalf("missing credential %q: %#v", key, resp.Credentials)
+		}
+	}
+	if resp.Credentials["tls"] != true {
+		t.Fatalf("tls: got %#v", resp.Credentials["tls"])
+	}
+	uri, _ := resp.Credentials["uri"].(string)
+	if !strings.Contains(uri, "tls=true") || !strings.Contains(uri, "authSource=admin") {
+		t.Fatalf("uri missing tls/authSource: %s", uri)
+	}
+}
+
+func TestSyncedHost(t *testing.T) {
+	c := &everestClient{namespace: "everest", hostNS: "everest-vcluster", vclusterName: "everest"}
+	got := c.syncedHost("", "pabc", "primary")
+	want := "pabc-primary-everest-x-everest.everest-vcluster.svc.cluster.local"
+	if got != want {
+		t.Fatalf("fallback: got %q want %q", got, want)
+	}
+	got = c.syncedHost("foo-haproxy.everest.svc.cluster.local", "foo", "haproxy")
+	want = "foo-haproxy-everest-x-everest.everest-vcluster.svc.cluster.local"
+	if got != want {
+		t.Fatalf("status host: got %q want %q", got, want)
+	}
+}
+
 func TestResourceName(t *testing.T) {
 	got, err := resourceName("d", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 	if err != nil {
@@ -76,5 +152,19 @@ func TestResourceName(t *testing.T) {
 	}
 	if _, err := resourceName("d", "not a uuid!"); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestEverestResourceNameHonorsEngineLimit(t *testing.T) {
+	id := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	got, err := everestResourceName(mysqlEngine, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "xaaaaaaaabbbbccccdddde" {
+		t.Fatalf("got %q", got)
+	}
+	if len(got) != mysqlEngine.MaxNameLength {
+		t.Fatalf("length %d != %d", len(got), mysqlEngine.MaxNameLength)
 	}
 }
