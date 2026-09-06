@@ -55,7 +55,7 @@ func (c *vclusterClient) syncedHost(inClusterHost, cluster, svcSuffix string) st
 	if inClusterHost != "" {
 		svc = strings.Split(inClusterHost, ".")[0]
 	}
-	return fmt.Sprintf("%s-%s-x-%s.%s.svc.cluster.local", svc, c.namespace, c.vclusterName, c.hostNS)
+	return fmt.Sprintf("%s-x-%s-x-%s.%s.svc.cluster.local", svc, c.namespace, c.vclusterName, c.hostNS)
 }
 
 func instanceLabels(instanceID, offering string) map[string]string {

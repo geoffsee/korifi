@@ -169,12 +169,12 @@ func TestGenerateTLS(t *testing.T) {
 func TestSyncedHost(t *testing.T) {
 	c := &vclusterClient{namespace: "everest", hostNS: "everest-vcluster", vclusterName: "everest"}
 	got := c.syncedHost("", "pabc", "primary")
-	want := "pabc-primary-everest-x-everest.everest-vcluster.svc.cluster.local"
+	want := "pabc-primary-x-everest-x-everest.everest-vcluster.svc.cluster.local"
 	if got != want {
 		t.Fatalf("fallback: got %q want %q", got, want)
 	}
 	got = c.syncedHost("foo-haproxy.everest.svc.cluster.local", "foo", "haproxy")
-	want = "foo-haproxy-everest-x-everest.everest-vcluster.svc.cluster.local"
+	want = "foo-haproxy-x-everest-x-everest.everest-vcluster.svc.cluster.local"
 	if got != want {
 		t.Fatalf("status host: got %q want %q", got, want)
 	}
