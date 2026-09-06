@@ -24,6 +24,7 @@ test("Everest vcluster installs OpenEverest and required monitoring CRDs", () =>
 	expect(text).not.toContain("${this.namespace}.svc");
 	expect(text).toContain('chart: "opensearch-operator"');
 	expect(text).toContain("opensearchOperatorChart");
+	expect(text).toContain("kubeRbacProxy: { enable: false }");
 	expect(text).not.toContain("kind: \"DatabaseCluster\"");
 	expect(text).not.toContain("kind: DatabaseCluster");
 });

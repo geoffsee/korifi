@@ -283,6 +283,9 @@ exit 1
 					manager: {
 						watchNamespace: this.dbNamespace,
 					},
+					// Chart 2.8.0 references a deleted gcr.io image by default.
+					// The proxy only protects the operator's metrics endpoint.
+					kubeRbacProxy: { enable: false },
 					webhook: { enabled: false },
 				},
 			},
