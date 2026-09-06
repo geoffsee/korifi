@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	openSearchVersion      = "2.19.2"
-	openSearchNodeReplicas = 3
+	openSearchVersion          = "2.19.2"
+	openSearchNodeReplicas     = 3
+	openSearchProvisionTimeout = 20 * time.Minute
 )
 
 var openSearchGVR = schema.GroupVersionResource{
@@ -48,7 +49,7 @@ func (c *vclusterClient) provisionOpenSearch(ctx context.Context, instanceID str
 	if err := c.ensureOpenSearchCluster(ctx, obj); err != nil {
 		return nil, err
 	}
-	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	waitCtx, cancel := context.WithTimeout(ctx, openSearchProvisionTimeout)
 	defer cancel()
 	httpTLS, err := c.waitOpenSearchHTTPSecret(waitCtx, name)
 	if err != nil {
