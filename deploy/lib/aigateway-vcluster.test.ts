@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import {
+	aiGatewayCertificateDNSNames,
 	buildAIGatewayRouteRules,
 	validateAIGatewayBackends,
 } from "./aigateway-vcluster";
@@ -79,6 +80,20 @@ test("builds one exact Envoy route rule per configured model", () => {
 			modelsOwnedBy: "openai",
 		},
 	]);
+});
+
+test("gateway certificate covers virtual and host-synced service names", () => {
+	expect(
+		aiGatewayCertificateDNSNames({
+			serviceName: "aigw",
+			serviceNamespace: "envoy-gateway-system",
+			gatewayNamespace: "aigateway",
+			vclusterName: "aigateway",
+			hostNamespace: "aigateway-vcluster",
+		}),
+	).toContain(
+		"aigw-x-envoy-gateway-system-x-aigateway.aigateway-vcluster.svc.cluster.local",
+	);
 });
 
 test("accepts multiple backends with distinct model associations", () => {

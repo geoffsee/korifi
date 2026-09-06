@@ -138,6 +138,27 @@ export function buildAIGatewayRouteRules(
 	);
 }
 
+export function aiGatewayCertificateDNSNames(args: {
+	serviceName: string;
+	serviceNamespace: string;
+	gatewayNamespace: string;
+	vclusterName: string;
+	hostNamespace: string;
+}): string[] {
+	const virtualNames = Array.from(
+		new Set([args.gatewayNamespace, args.serviceNamespace]),
+	).flatMap((namespace) => [
+		`${args.serviceName}.${namespace}`,
+		`${args.serviceName}.${namespace}.svc`,
+		`${args.serviceName}.${namespace}.svc.cluster.local`,
+	]);
+	return [
+		args.serviceName,
+		...virtualNames,
+		`${args.serviceName}-x-${args.serviceNamespace}-x-${args.vclusterName}.${args.hostNamespace}.svc.cluster.local`,
+	];
+}
+
 export class AIGatewayVcluster extends pulumi.ComponentResource {
 	readonly namespace: string;
 	readonly gatewayNamespace: string;
@@ -423,12 +444,13 @@ exit 1
 			},
 			{ parent: this },
 		);
-		const gatewayDns = [
-			"aigw",
-			`aigw.${gwNs}`,
-			`aigw.${gwNs}.svc`,
-			`aigw.${gwNs}.svc.cluster.local`,
-		];
+		const gatewayDns = aiGatewayCertificateDNSNames({
+			serviceName: "aigw",
+			serviceNamespace: "envoy-gateway-system",
+			gatewayNamespace: gwNs,
+			vclusterName,
+			hostNamespace: this.namespace,
+		});
 		const gwMaterial = signedCert(
 			this,
 			`${name}-gw`,
