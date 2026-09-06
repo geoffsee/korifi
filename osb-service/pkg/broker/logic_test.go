@@ -154,3 +154,17 @@ func TestResourceName(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestEverestResourceNameHonorsEngineLimit(t *testing.T) {
+	id := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	got, err := everestResourceName(mysqlEngine, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "xaaaaaaaabbbbccccdddde" {
+		t.Fatalf("got %q", got)
+	}
+	if len(got) != mysqlEngine.MaxNameLength {
+		t.Fatalf("length %d != %d", len(got), mysqlEngine.MaxNameLength)
+	}
+}

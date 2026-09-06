@@ -34,6 +34,8 @@ type everestEngine struct {
 	// is empty. Host DNS is rewritten to the vcluster-synced Service.
 	Service string
 	Prefix  string
+	// MaxNameLength accommodates engine-operator limits stricter than DNS-1123.
+	MaxNameLength int
 }
 
 var (
@@ -43,7 +45,7 @@ var (
 	}
 	mysqlEngine = everestEngine{
 		Type: "pxc", ProxyType: "haproxy", Version: "8.0.39-30.1",
-		DefaultPort: 3306, Service: "haproxy", Prefix: "x",
+		DefaultPort: 3306, Service: "haproxy", Prefix: "x", MaxNameLength: 22,
 	}
 	mongoEngine = everestEngine{
 		Type: "psmdb", Version: "8.0.12-4",
@@ -90,7 +92,7 @@ func (c *everestClient) healthy(ctx context.Context) error {
 }
 
 func (c *everestClient) provision(ctx context.Context, instanceID string, eng everestEngine) (map[string]any, error) {
-	name, err := resourceName(eng.Prefix, instanceID)
+	name, err := everestResourceName(eng, instanceID)
 	if err != nil {
 		return nil, err
 	}
@@ -166,6 +168,17 @@ func (c *everestClient) waitReady(ctx context.Context, name string) error {
 func databaseClusterReady(cluster *unstructured.Unstructured) bool {
 	status, found, err := unstructured.NestedString(cluster.Object, "status", "status")
 	return err == nil && found && status == "ready"
+}
+
+func everestResourceName(eng everestEngine, instanceID string) (string, error) {
+	name, err := resourceName(eng.Prefix, instanceID)
+	if err != nil {
+		return "", err
+	}
+	if eng.MaxNameLength > 0 && len(name) > eng.MaxNameLength {
+		name = name[:eng.MaxNameLength]
+	}
+	return name, nil
 }
 
 func (c *everestClient) deprovision(ctx context.Context, name string) error {
