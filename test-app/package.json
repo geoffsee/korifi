@@ -1,0 +1,21 @@
+{
+  "name": "korifi-di-framework-bindings-test",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "test": "bun test",
+    "typecheck": "bun x tsc --noEmit",
+    "build": "bun build src/server.ts --target=bun --outdir=dist",
+    "package:cf": "bun build --compile --target=bun-linux-x64-baseline src/server.ts --outfile=dist/cf/server && cp Procfile dist/cf/Procfile"
+  },
+  "dependencies": {
+    "@di-framework/core": "5.2.2",
+    "di-framework": "github:di-framework/di-framework#5b0cb7fc28eb93fda5a0f9a30969463e1f40e196"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "typescript": "5.9.3"
+  }
+}

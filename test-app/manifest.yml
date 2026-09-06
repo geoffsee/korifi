@@ -1,0 +1,8 @@
+applications:
+  - name: di-framework-bindings
+    path: dist/cf
+    memory: 256M
+    disk-quota: 512M
+    buildpacks:
+      - paketo-buildpacks/procfile
+    health-check-type: port
