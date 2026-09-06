@@ -9,6 +9,7 @@ const text = fs.readFileSync(
 
 test("database backends are OpenEverest in a vcluster", () => {
 	expect(text).toContain("EverestVcluster");
+	expect(text).toContain("AIGatewayVcluster");
 	expect(text).toContain("kindClusterName");
 	expect(text).toContain("inClusterKubeconfig");
 	expect(text).not.toContain('chart: "pg-operator"');

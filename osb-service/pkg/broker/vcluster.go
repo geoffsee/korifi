@@ -26,12 +26,16 @@ type vclusterClient struct {
 }
 
 func newVClusterClient(o Options) (*vclusterClient, error) {
-	if o.EverestKubeconfig == "" {
+	return kubeconfigClient(o.EverestKubeconfig, o.EverestNamespace, o.EverestHostNamespace, o.EverestVClusterName)
+}
+
+func kubeconfigClient(kubeconfig, namespace, hostNS, vclusterName string) (*vclusterClient, error) {
+	if kubeconfig == "" {
 		return nil, nil
 	}
-	cfg, err := clientcmd.BuildConfigFromFlags("", o.EverestKubeconfig)
+	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		return nil, fmt.Errorf("everest kubeconfig: %w", err)
+		return nil, fmt.Errorf("kubeconfig: %w", err)
 	}
 	dyn, err := dynamic.NewForConfig(cfg)
 	if err != nil {
@@ -44,18 +48,22 @@ func newVClusterClient(o Options) (*vclusterClient, error) {
 	return &vclusterClient{
 		dyn:          dyn,
 		core:         core,
-		namespace:    o.EverestNamespace,
-		hostNS:       o.EverestHostNamespace,
-		vclusterName: o.EverestVClusterName,
+		namespace:    namespace,
+		hostNS:       hostNS,
+		vclusterName: vclusterName,
 	}, nil
 }
 
 func (c *vclusterClient) syncedHost(inClusterHost, cluster, svcSuffix string) string {
+	return c.syncedHostInNamespace(inClusterHost, c.namespace, cluster, svcSuffix)
+}
+
+func (c *vclusterClient) syncedHostInNamespace(inClusterHost, namespace, cluster, svcSuffix string) string {
 	svc := cluster + "-" + svcSuffix
 	if inClusterHost != "" {
 		svc = strings.Split(inClusterHost, ".")[0]
 	}
-	return fmt.Sprintf("%s-x-%s-x-%s.%s.svc.cluster.local", svc, c.namespace, c.vclusterName, c.hostNS)
+	return fmt.Sprintf("%s-x-%s-x-%s.%s.svc.cluster.local", svc, namespace, c.vclusterName, c.hostNS)
 }
 
 func instanceLabels(instanceID, offering string) map[string]string {

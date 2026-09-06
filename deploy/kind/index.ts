@@ -47,8 +47,10 @@ import {
 } from "@korifi/deploy-lib";
 import { KindCluster } from "./cluster";
 import { KindEverestOperatorBundles } from "./everest-operator-bundles";
+import { KindImagePrefetch } from "./image-prefetch";
 import {
 	adminEmail,
+	aiGatewayBackends,
 	apiUrl,
 	appDomain,
 	clusterName,
@@ -81,6 +83,12 @@ const cluster = new KindCluster(
 	{ dependsOn: [certs.filesReady] },
 );
 
+const prefetchedImages = new KindImagePrefetch(
+	"external-images",
+	{ clusterName, dependsOn: [cluster] },
+	{ dependsOn: [cluster] },
+);
+
 const namespaces = new KorifiNamespaces(
 	"ns",
 	{ provider: cluster.provider, installerNamespace: true },
@@ -92,9 +100,9 @@ const registry = new LocalRegistry(
 	{
 		provider: cluster.provider,
 		username: registryUser,
-		dependsOn: [namespaces],
+		dependsOn: [namespaces, prefetchedImages.coreLoaded],
 	},
-	{ dependsOn: [namespaces] },
+	{ dependsOn: [namespaces, prefetchedImages.coreLoaded] },
 );
 
 const cfPullSecret = registry.pullSecret(
@@ -136,9 +144,9 @@ const dependencies = new KorifiDependencies(
 		insecureTlsMetricsServer: true,
 		installerImage: pinned.installerImage,
 		installerNamespace: namespaces.installer!.metadata.name,
-		dependsOn: [namespaces.installer!],
+		dependsOn: [namespaces.installer!, prefetchedImages.coreLoaded],
 	},
-	{ dependsOn: [namespaces] },
+	{ dependsOn: [namespaces, prefetchedImages.coreLoaded] },
 );
 
 const uaa = new UaaVcluster(
@@ -243,9 +251,9 @@ const everestOperatorBundles = new KindEverestOperatorBundles(
 	"everest-operator-bundles",
 	{
 		clusterName,
-		dependsOn: [cluster],
+		dependsOn: [cluster, prefetchedImages.servicesLoaded],
 	},
-	{ dependsOn: [cluster] },
+	{ dependsOn: [cluster, prefetchedImages.servicesLoaded] },
 );
 
 const brokerServices = new ServiceBrokerServices(
@@ -253,7 +261,8 @@ const brokerServices = new ServiceBrokerServices(
 	{
 		provider: cluster.provider,
 		kindClusterName: clusterName,
-		enable: { postgres: true },
+		aigatewayBackends: aiGatewayBackends,
+		enable: { postgres: true, aigateway: true },
 		dependsOn: [korifi.release, everestOperatorBundles.loaded],
 	},
 	{ dependsOn: [korifi, everestOperatorBundles] },
@@ -277,6 +286,7 @@ const osbBroker = new OsbServiceBroker(
 		imagePullPolicy: "Never",
 		backends: {
 			everest: brokerServices.everest,
+			aigateway: brokerServices.aigateway,
 		},
 		rootNamespace: namespaces.rootName,
 		dependsOn: [korifi.release, osbImage.loaded],
@@ -307,7 +317,15 @@ export const everest = brokerServices.everest
 		}
 	: undefined;
 
+export const aigateway = brokerServices.aigateway
+	? {
+			namespace: brokerServices.aigateway.namespace,
+			hostNamespace: brokerServices.aigateway.hostNamespace,
+			vclusterName: brokerServices.aigateway.vclusterName,
+		}
+	: undefined;
+
 export const osbBrokerUrl = osbBroker.url;
 export const osbServiceImage = osbImage.image;
 export const marketplaceHint =
-	"cf enable-service-access postgres && cf enable-service-access mysql && cf enable-service-access mongodb && cf enable-service-access ozone && cf enable-service-access nats && cf enable-service-access opensearch && cf enable-service-access redis && cf marketplace && cf create-service postgres dedicated mydb";
+	"cf enable-service-access postgres && cf enable-service-access mysql && cf enable-service-access mongodb && cf enable-service-access ozone && cf enable-service-access nats && cf enable-service-access opensearch && cf enable-service-access redis && cf enable-service-access aigateway && cf marketplace && cf create-service postgres dedicated mydb";

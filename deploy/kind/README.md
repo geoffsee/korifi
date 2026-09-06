@@ -25,7 +25,9 @@ OpenEverest runs in a vcluster; `cf create-service postgres dedicated`
 `cf create-service ozone dedicated` creates one Apache Ozone cluster
 (S3 gateway) in the same vcluster; `nats dedicated` creates a NATS
 JetStream server; `opensearch dedicated` creates an OpenSearch cluster;
-`redis dedicated` creates a Redis server. Stack outputs include `everest`,
+`redis dedicated` creates a Redis server. `aigateway dedicated` issues a
+tenant API key on the shared Envoy AI Gateway, which forwards to an external
+OpenAI-compatible backend. Stack outputs include `everest`,
 `osbBrokerUrl`, and `marketplaceHint`.
 
 ## Quick start
@@ -40,6 +42,19 @@ pulumi up --stack dev
 
 Prerequisites: Docker, [kind](https://kind.sigs.k8s.io/), `pulumi`, `kubectl`,
 `cf` CLI v8+. First `pulumi up` compiles the Korifi Go images (a few minutes).
+It also downloads the declared external images in parallel and caches them
+directly in every Kind node before the corresponding deployment phase. This
+preserves upstream names and digests, so Kubernetes uses the cache without a
+registry mirror or rewritten manifests.
+
+To refresh the complete cache independently of Pulumi for an existing cluster:
+
+```sh
+./prefetch-images.sh --cluster korifi
+```
+
+Use `--jobs N` to control download concurrency or `--images FILE` to load a
+custom newline-delimited manifest. Re-running the script skips cached images.
 
 Afterwards:
 
@@ -55,6 +70,7 @@ cf enable-service-access ozone
 cf enable-service-access nats
 cf enable-service-access opensearch
 cf enable-service-access redis
+cf enable-service-access aigateway
 cf marketplace
 ```
 
@@ -69,17 +85,56 @@ flags, the stack deletes and recreates it on the next `pulumi up`.
 
 ## Configuration
 
-| Key | Default | Meaning |
-| --- | --- | --- |
-| `clusterName` | `korifi` | kind cluster name |
-| `appDomain` | `apps-127-0-0-1.nip.io` | CF apps wildcard domain |
-| `apiUrl` | `localhost` | Korifi API host |
-| `adminEmail` | `admin@korifi.local` | UAA admin / `cf login` user |
-| `oidcPrefix` | `uaa` | OIDC username prefix |
-| `registryUser` | `user` | In-cluster registry username |
-| `kubeconfigPath` | `~/.kube/kind-<clusterName>.config` | Written by the stack |
-| `korifiVersion` | pinned in `../lib/versions.ts` | Helm chart release |
-| `installerImage` | pinned digest | Dependencies Job image |
+| Key                             | Default                             | Meaning                                               |
+| ------------------------------- | ----------------------------------- | ----------------------------------------------------- |
+| `clusterName`                   | `korifi`                            | kind cluster name                                     |
+| `appDomain`                     | `apps-127-0-0-1.nip.io`             | CF apps wildcard domain                               |
+| `apiUrl`                        | `localhost`                         | Korifi API host                                       |
+| `adminEmail`                    | `admin@korifi.local`                | UAA admin / `cf login` user                           |
+| `oidcPrefix`                    | `uaa`                               | OIDC username prefix                                  |
+| `registryUser`                  | `user`                              | In-cluster registry username                          |
+| `aiGatewayBackends`             | OpenAI with `gpt-5.6-luna`          | Backend origins, authentication types, and model maps |
+| `aiGatewayBackendApiKey-<name>` | none                                | Encrypted API key for one authenticated backend       |
+| `kubeconfigPath`                | `~/.kube/kind-<clusterName>.config` | Written by the stack                                  |
+| `korifiVersion`                 | pinned in `../lib/versions.ts`      | Helm chart release                                    |
+| `installerImage`                | pinned digest                       | Dependencies Job image                                |
+
+The default backend requires an OpenAI key. Load it into Pulumi as a separate
+secret before `pulumi up` (for example, from the root `.env.secrets` file):
+
+```sh
+set -a
+. ../../.env.secrets
+set +a
+printf '%s' "$OPENAI_API_KEY" \
+  | pulumi config set --secret aiGatewayBackendApiKey-openai --stack dev
+```
+
+To declare multiple backends, set the public routing configuration as JSON. A
+model must be associated with exactly one backend, and each URL must be an
+`http://` or `https://` origin without a path:
+
+```sh
+pulumi config set aiGatewayBackends '[
+  {
+    "name": "openai",
+    "url": "https://api.openai.com",
+    "models": ["gpt-5.6-luna"],
+    "authentication": "apiKey"
+  },
+  {
+    "name": "local-vllm",
+    "url": "http://host.docker.internal:8000",
+    "models": ["meta-llama/Llama-3.1-8B-Instruct"],
+    "authentication": "none"
+  }
+]' --stack dev
+```
+
+For every backend using `"authentication": "apiKey"`, set a matching secret
+named `aiGatewayBackendApiKey-<name>` with `pulumi config set --secret`. Never
+put API keys in `aiGatewayBackends`; Pulumi generates the Envoy backend auth
+resources from the separate encrypted values.
 
 ## Teardown
 

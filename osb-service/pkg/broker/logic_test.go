@@ -33,10 +33,10 @@ func TestCatalogDedicatedEngines(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := b.Catalog()
-	if len(c.Services) != 7 {
+	if len(c.Services) != 8 {
 		t.Fatalf("unexpected catalog: %#v", c)
 	}
-	want := []string{"mongodb", "mysql", "nats", "opensearch", "ozone", "postgres", "redis"}
+	want := []string{"aigateway", "mongodb", "mysql", "nats", "opensearch", "ozone", "postgres", "redis"}
 	for i, name := range want {
 		if c.Services[i].Name != name || c.Services[i].Plans[0].Name != "dedicated" {
 			t.Fatalf("service %d: %#v", i, c.Services[i])
@@ -212,6 +212,41 @@ func TestBindRedisCredentials(t *testing.T) {
 	}
 }
 
+func TestBindAIGatewayCredentials(t *testing.T) {
+	b, err := NewBusinessLogic(Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	_, status, err := b.Provision(id, ProvisionRequest{ServiceID: AIGatewayServiceID, PlanID: AIGatewayPlanID})
+	if err != nil || status != http.StatusCreated {
+		t.Fatalf("provision: %d %v", status, err)
+	}
+	resp, status, err := b.Bind(id, "bbbbbbbb-cccc-dddd-eeee-ffffffffffff", BindRequest{ServiceID: AIGatewayServiceID, PlanID: AIGatewayPlanID})
+	if err != nil || status != http.StatusCreated {
+		t.Fatalf("bind: %d %v", status, err)
+	}
+	for _, key := range []string{"uri", "openai_api_base", "api_key", "hostname"} {
+		if resp.Credentials[key] == nil || resp.Credentials[key] == "" {
+			t.Fatalf("missing credential %q: %#v", key, resp.Credentials)
+		}
+	}
+	if resp.Credentials["tls"] != true {
+		t.Fatalf("tls: %#v", resp.Credentials["tls"])
+	}
+	if _, ok := resp.Credentials["model"]; ok {
+		t.Fatalf("model must not be in VCAP: %#v", resp.Credentials)
+	}
+	uri, _ := resp.Credentials["uri"].(string)
+	base, _ := resp.Credentials["openai_api_base"].(string)
+	if !strings.HasPrefix(uri, "https://") || !strings.HasSuffix(uri, "/v1") {
+		t.Fatalf("uri: %s", uri)
+	}
+	if uri != base {
+		t.Fatalf("openai_api_base %q != uri %q", base, uri)
+	}
+}
+
 func TestBindNATSCredentials(t *testing.T) {
 	b, err := NewBusinessLogic(Options{})
 	if err != nil {
@@ -261,6 +296,11 @@ func TestSyncedHost(t *testing.T) {
 	want = "foo-haproxy-x-everest-x-everest.everest-vcluster.svc.cluster.local"
 	if got != want {
 		t.Fatalf("status host: got %q want %q", got, want)
+	}
+	got = c.syncedHostInNamespace("aigw", "envoy-gateway-system", "", "")
+	want = "aigw-x-envoy-gateway-system-x-everest.everest-vcluster.svc.cluster.local"
+	if got != want {
+		t.Fatalf("explicit namespace: got %q want %q", got, want)
 	}
 }
 

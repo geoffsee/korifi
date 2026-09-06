@@ -54,8 +54,17 @@ export {
 	type EverestVclusterArgs,
 } from "./everest-vcluster";
 export {
+	AIGatewayVcluster,
+	buildAIGatewayRouteRules,
+	kindAIGatewayVclusterLocalApiPort,
+	validateAIGatewayBackends,
+	type AIGatewayBackend,
+	type AIGatewayVclusterArgs,
+} from "./aigateway-vcluster";
+export {
 	ServiceBrokerServices,
 	defaultServiceBrokerServiceEnable,
+	type AIGatewayConnection,
 	type EverestConnection,
 	type ServiceBrokerServiceConnection,
 	type ServiceBrokerServicesArgs,
