@@ -30,7 +30,7 @@ func TestDatabaseClusterReady(t *testing.T) {
 	}
 }
 
-func TestPostgresCredentialsDefaultToExistingDatabase(t *testing.T) {
+func TestCredentialsUseEngineDefaultDatabase(t *testing.T) {
 	client := &everestClient{
 		namespace:    "everest",
 		hostNS:       "everest-vcluster",
@@ -41,9 +41,22 @@ func TestPostgresCredentialsDefaultToExistingDatabase(t *testing.T) {
 		"password": []byte("database-password"),
 	}}
 
-	credentials := client.credentialsFromSecret("pcluster", secret)
+	for _, tc := range []struct {
+		name     string
+		engine   everestEngine
+		cluster  string
+		expected string
+	}{
+		{name: "postgres", engine: postgresEngine, cluster: "pcluster", expected: "postgres"},
+		{name: "mysql", engine: mysqlEngine, cluster: "xcluster", expected: "mysql"},
+		{name: "mongodb", engine: mongoEngine, cluster: "mcluster", expected: "mcluster"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			credentials := client.credentialsFromSecret(tc.engine, tc.cluster, secret, "", 0)
 
-	if got := credentials["database"]; got != "postgres" {
-		t.Fatalf("database = %q, want postgres", got)
+			if got := credentials["database"]; got != tc.expected {
+				t.Fatalf("database = %q, want %q", got, tc.expected)
+			}
+		})
 	}
 }

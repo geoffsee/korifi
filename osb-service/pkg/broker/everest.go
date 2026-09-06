@@ -30,6 +30,9 @@ type everestEngine struct {
 	ProxyType   string
 	Version     string
 	DefaultPort int
+	// DefaultDatabase is used when the operator connection Secret omits a
+	// logical database name. An empty value uses the cluster name.
+	DefaultDatabase string
 	// Service is the in-vcluster Service name suffix used when status.hostname
 	// is empty. Host DNS is rewritten to the vcluster-synced Service.
 	Service string
@@ -41,11 +44,11 @@ type everestEngine struct {
 var (
 	postgresEngine = everestEngine{
 		Type: "postgresql", ProxyType: "pgbouncer", Version: "17.10",
-		DefaultPort: 5432, Service: "primary", Prefix: "p",
+		DefaultPort: 5432, DefaultDatabase: "postgres", Service: "primary", Prefix: "p",
 	}
 	mysqlEngine = everestEngine{
 		Type: "pxc", ProxyType: "haproxy", Version: "8.0.39-30.1",
-		DefaultPort: 3306, Service: "haproxy", Prefix: "x", MaxNameLength: 22,
+		DefaultPort: 3306, DefaultDatabase: "mysql", Service: "haproxy", Prefix: "x", MaxNameLength: 22,
 	}
 	mongoEngine = everestEngine{
 		Type: "psmdb", Version: "8.0.12-4",
@@ -253,7 +256,10 @@ func (c *everestClient) credentialsFromSecret(eng everestEngine, cluster string,
 	pass := get("password", "root", "MONGODB_DATABASE_ADMIN_PASSWORD")
 	db := get("dbname", "database")
 	if db == "" {
-		db = "postgres"
+		db = eng.DefaultDatabase
+	}
+	if db == "" {
+		db = cluster
 	}
 	port := eng.DefaultPort
 	if statusPort > 0 {
