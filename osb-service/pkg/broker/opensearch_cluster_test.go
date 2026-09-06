@@ -41,6 +41,22 @@ func TestOpenSearchClusterUsesCredentialAndSecurityConfigSecrets(t *testing.T) {
 	}
 }
 
+func TestOpenSearchClusterHasAQuorumAfterBootstrapExits(t *testing.T) {
+	cluster := openSearchCluster("search", "everest", map[string]string{"test": "true"})
+
+	nodePools, found, err := unstructured.NestedSlice(cluster.Object, "spec", "nodePools")
+	if err != nil || !found || len(nodePools) != 1 {
+		t.Fatalf("nodePools = %#v, found %t, error %v", nodePools, found, err)
+	}
+	nodePool, ok := nodePools[0].(map[string]any)
+	if !ok {
+		t.Fatalf("nodePools[0] = %#v", nodePools[0])
+	}
+	if nodePool["replicas"] != int64(openSearchNodeReplicas) {
+		t.Fatalf("nodePools[0].replicas = %#v, want %d", nodePool["replicas"], openSearchNodeReplicas)
+	}
+}
+
 func TestOpenSearchInternalUsersHashesAdminPassword(t *testing.T) {
 	password := "not-the-demo-password"
 	config, err := openSearchInternalUsers(password)

@@ -2,7 +2,12 @@ package broker
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -13,7 +18,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-const openSearchVersion = "2.19.2"
+const (
+	openSearchVersion      = "2.19.2"
+	openSearchNodeReplicas = 3
+)
 
 var openSearchGVR = schema.GroupVersionResource{
 	Group:    "opensearch.opster.io",
@@ -40,17 +48,20 @@ func (c *vclusterClient) provisionOpenSearch(ctx context.Context, instanceID str
 	if err := c.ensureOpenSearchCluster(ctx, obj); err != nil {
 		return nil, err
 	}
-	if err := c.waitSTS(ctx, name+"-nodes"); err != nil {
-		return nil, err
-	}
-	httpTLS, err := c.waitOpenSearchHTTPSecret(ctx, name)
+	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	httpTLS, err := c.waitOpenSearchHTTPSecret(waitCtx, name)
 	if err != nil {
 		return nil, err
 	}
 	host := c.syncedHost(name, name, name)
+	tlsServerName := fmt.Sprintf("%s.%s.svc.cluster.local", name, c.namespace)
+	if err := c.waitOpenSearchReady(waitCtx, name, host, tlsServerName, httpTLS.Data["ca.crt"], user, password); err != nil {
+		return nil, err
+	}
 	creds := openSearchCredentials(host, 9200, user, password)
 	creds["ca_cert"] = string(httpTLS.Data["ca.crt"])
-	creds["tls_server_name"] = fmt.Sprintf("%s.%s.svc.cluster.local", name, c.namespace)
+	creds["tls_server_name"] = tlsServerName
 	creds["cluster"] = name
 	creds["instance_id"] = instanceID
 	creds["engine"] = "opensearch"
@@ -179,6 +190,73 @@ func (c *vclusterClient) waitOpenSearchHTTPSecret(ctx context.Context, name stri
 	return nil, fmt.Errorf("timed out waiting for OpenSearch HTTP TLS secret %s", secretName)
 }
 
+func (c *vclusterClient) waitOpenSearchReady(ctx context.Context, name, host, tlsServerName string, caCert []byte, username, password string) error {
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(caCert) {
+		return fmt.Errorf("OpenSearch HTTP TLS secret contains an invalid ca.crt")
+	}
+	transport := &http.Transport{TLSClientConfig: &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		RootCAs:    roots,
+		ServerName: tlsServerName,
+	}}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, Timeout: 15 * time.Second}
+	healthURL := fmt.Sprintf("https://%s/_cluster/health?wait_for_status=yellow&timeout=5s", net.JoinHostPort(host, "9200"))
+
+	for {
+		topologyReady, err := c.openSearchTopologyReady(ctx, name)
+		if err != nil {
+			return err
+		}
+		if topologyReady {
+			request, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+			if err != nil {
+				return fmt.Errorf("create OpenSearch health request: %w", err)
+			}
+			request.SetBasicAuth(username, password)
+			response, err := client.Do(request)
+			if err == nil {
+				var health struct {
+					Status string `json:"status"`
+				}
+				decodeErr := json.NewDecoder(response.Body).Decode(&health)
+				response.Body.Close()
+				if response.StatusCode == http.StatusOK && decodeErr == nil && (health.Status == "yellow" || health.Status == "green") {
+					return nil
+				}
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for OpenSearch cluster %s to become healthy: %w", name, ctx.Err())
+		case <-time.After(5 * time.Second):
+		}
+	}
+}
+
+func (c *vclusterClient) openSearchTopologyReady(ctx context.Context, name string) (bool, error) {
+	sts, err := c.core.AppsV1().StatefulSets(c.namespace).Get(ctx, name+"-nodes", metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("get OpenSearch StatefulSet %s-nodes: %w", name, err)
+	}
+	if sts.Status.ReadyReplicas != openSearchNodeReplicas {
+		return false, nil
+	}
+	_, err = c.core.CoreV1().Pods(c.namespace).Get(ctx, name+"-bootstrap-0", metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("get OpenSearch bootstrap pod %s-bootstrap-0: %w", name, err)
+	}
+	return false, nil
+}
+
 func openSearchCluster(name, namespace string, ls map[string]string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "opensearch.opster.io/v1",
@@ -212,11 +290,11 @@ func openSearchCluster(name, namespace string, ls map[string]string) *unstructur
 			"nodePools": []any{
 				map[string]any{
 					"component": "nodes",
-					"replicas":  1,
+					"replicas":  int64(openSearchNodeReplicas),
 					"diskSize":  "2Gi",
 					"roles":     []any{"cluster_manager", "data", "ingest"},
 					"resources": map[string]any{
-						"requests": map[string]any{"cpu": "250m", "memory": "1Gi"},
+						"requests": map[string]any{"cpu": "100m", "memory": "512Mi"},
 					},
 				},
 			},
