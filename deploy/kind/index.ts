@@ -310,4 +310,4 @@ export const everest = brokerServices.everest
 export const osbBrokerUrl = osbBroker.url;
 export const osbServiceImage = osbImage.image;
 export const marketplaceHint =
-	"cf enable-service-access postgres && cf enable-service-access mysql && cf enable-service-access mongodb && cf enable-service-access ozone && cf enable-service-access nats && cf marketplace && cf create-service postgres dedicated mydb";
+	"cf enable-service-access postgres && cf enable-service-access mysql && cf enable-service-access mongodb && cf enable-service-access ozone && cf enable-service-access nats && cf enable-service-access opensearch && cf marketplace && cf create-service postgres dedicated mydb";

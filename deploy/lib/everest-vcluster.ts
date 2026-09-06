@@ -268,7 +268,35 @@ exit 1
 			},
 		);
 
-		this.ready = everest;
+		const opensearchOperator = new k8s.helm.v3.Release(
+			`${name}-opensearch-operator`,
+			{
+				name: "opensearch-operator",
+				chart: "opensearch-operator",
+				version: versions.opensearchOperatorChart,
+				repositoryOpts: {
+					repo: "https://opensearch-project.github.io/opensearch-k8s-operator/",
+				},
+				namespace: "everest-system",
+				timeout: 900,
+				values: {
+					manager: {
+						watchNamespace: this.dbNamespace,
+					},
+					// Chart 2.8.0 references a deleted gcr.io image by default.
+					// The proxy only protects the operator's metrics endpoint.
+					kubeRbacProxy: { enable: false },
+					webhook: { enabled: false },
+				},
+			},
+			{
+				...virtualOpts,
+				dependsOn: [systemNs, everest],
+				customTimeouts: { create: "20m", update: "20m" },
+			},
+		);
+
+		this.ready = opensearchOperator;
 		this.registerOutputs({
 			namespace: this.namespace,
 			dbNamespace: this.dbNamespace,

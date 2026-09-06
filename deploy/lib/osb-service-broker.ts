@@ -5,11 +5,11 @@
  * issued. Self-signed material needs Korifi `trustInsecureBrokers`.
  *
  * Backing stores come from ServiceBrokerServices via `backends`. Everest
- * backs postgres, mysql, and mongodb dedicated clusters. Apache Ozone
- * and NATS dedicated instances are created in the same vcluster.
+ * backs postgres, mysql, and mongodb dedicated clusters. Apache Ozone,
+ * NATS, and OpenSearch dedicated instances are created in the same vcluster.
  *
  * Plans default to admin visibility; `cf enable-service-access postgres`
- * (and `mysql`, `mongodb`, `ozone`, `nats`) after install.
+ * (and `mysql`, `mongodb`, `ozone`, `nats`, `opensearch`) after install.
  */
 import * as path from "node:path";
 import * as k8s from "@pulumi/kubernetes";
