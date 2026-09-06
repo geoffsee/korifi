@@ -1,9 +1,16 @@
 # deploy/k0s — Korifi on a 3-node k0s cluster in Docker
 
 One `pulumi up` creates a **k0s** cluster (not kind) with three Docker
-nodes and then applies the same platform layers as [`../kind`](../kind):
-in-cluster registry, Korifi dependencies, Knative Serving, UAA in a
-vcluster, and the OSB marketplace.
+nodes (`docker.Container` / `docker.Volume`) and then applies the same
+platform layers as [`../kind`](../kind): in-cluster registry, Korifi
+dependencies, Knative Serving, UAA in a vcluster, and the OSB marketplace.
+
+Platform images are imported from the sibling `image-archives`
+directory (arm64) or `image-archives-amd64` (amd64) next to this git
+checkout — no registry pulls.
+Override the path with `KORIFI_IMAGE_ARCHIVES`. The k0s node image itself
+is taken from the local Docker cache, or `docker load`'d from that archive
+set if a matching tarball is present.
 
 | Node | Docker name | Role |
 | --- | --- | --- |
@@ -32,9 +39,14 @@ pulumi stack init dev   # once
 pulumi up --stack dev
 ```
 
-Prerequisites: Docker, `pulumi`, `kubectl`, `cf` CLI v8+ (no kind binary).
+Prerequisites: Docker, `pulumi`, `kubectl`, `cf` CLI v8+ (no kind binary),
+and the sibling image-archives tree next to this checkout.
 First `pulumi up` compiles the Korifi Go images (a few minutes) and
-prefetches external images into every k0s node.
+imports archived platform images into every k0s node.
+
+If this stack was previously created with the shell-script bootstrap,
+`pulumi destroy --stack dev` before the first `pulumi up` on this graph
+so Docker container names do not collide.
 
 The default AI Gateway backend requires an OpenAI key. Load it before
 `pulumi up`:
@@ -84,6 +96,10 @@ kube-apiserver is configured with that issuer for OIDC.
 | `korifiVersion`                 | pinned in `../lib/versions.ts`     | Helm chart release                                    |
 | `installerImage`                | pinned digest                      | Dependencies Job image                                |
 | `k0sImage`                      | pinned in `../lib/versions.ts`     | `k0sproject/k0s` OCI image                            |
+
+`KORIFI_IMAGE_ARCHIVES` (environment, not Pulumi config) points at the
+docker-save tree (`manifest.tsv` + `tars/`). Default is `../image-archives`
+or `../image-archives-amd64` next to this git checkout.
 
 ## Teardown
 

@@ -4,6 +4,7 @@ import * as path from "node:path";
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
 import { k0sNodeContainers } from "./cluster";
+import { defaultImageArchivesDir } from "./image-archives";
 
 const scriptPath = path.join(__dirname, "prefetch-images.sh");
 const kindDir = path.join(__dirname, "..", "kind");
@@ -37,14 +38,16 @@ export class K0sImagePrefetch extends pulumi.ComponentResource {
 		super("korifi:deploy:K0sImagePrefetch", name, {}, opts);
 
 		const nodes = k0sNodeContainers(args.clusterName);
+		const archivesDir = defaultImageArchivesDir();
 		const scriptFingerprint = fs.readFileSync(scriptPath, "utf8");
 		const createCommand = () =>
-			'"$PREFETCH_SCRIPT" --cluster "$K0S_CLUSTER" --images "$IMAGE_MANIFEST" --jobs "$PREFETCH_JOBS"';
+			'"$PREFETCH_SCRIPT" --cluster "$K0S_CLUSTER" --images "$IMAGE_MANIFEST" --jobs "$PREFETCH_JOBS" --archives "$KORIFI_IMAGE_ARCHIVES"';
 		const environment = (manifestPath: string) => ({
 			K0S_CLUSTER: args.clusterName,
 			PREFETCH_JOBS: String(args.parallelism ?? 6),
 			PREFETCH_SCRIPT: scriptPath,
 			IMAGE_MANIFEST: manifestPath,
+			KORIFI_IMAGE_ARCHIVES: archivesDir,
 		});
 
 		this.coreLoaded = new command.local.Command(
@@ -55,6 +58,7 @@ export class K0sImagePrefetch extends pulumi.ComponentResource {
 				triggers: [
 					args.clusterName,
 					scriptFingerprint,
+					archivesDir,
 					nodes.korifi,
 					nodes.osb,
 					nodes.knative,
@@ -78,6 +82,7 @@ export class K0sImagePrefetch extends pulumi.ComponentResource {
 				triggers: [
 					args.clusterName,
 					scriptFingerprint,
+					archivesDir,
 					nodes.korifi,
 					nodes.osb,
 					nodes.knative,

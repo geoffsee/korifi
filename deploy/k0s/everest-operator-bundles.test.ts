@@ -13,6 +13,8 @@ test("preloads the pinned OpenEverest OLM bundles into k0s nodes", () => {
 	for (const image of everestOperatorBundleImages) {
 		expect(image).toMatch(/^docker\.io\/percona\/.+:[\d.]+-community-bundle$/);
 	}
-	expect(text).toContain("k0s ctr images pull");
+	expect(text).toContain("prefetch-images.sh");
+	expect(text).toContain("KORIFI_IMAGE_ARCHIVES");
+	expect(text).not.toContain("k0s ctr images pull");
 	expect(text).not.toContain("kind get nodes");
 });

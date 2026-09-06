@@ -1,7 +1,8 @@
 /** Preload OpenEverest's OLM bundles into k0s before its installer hook runs. */
+import * as path from "node:path";
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
-import { k0sNodeContainers } from "./cluster";
+import { defaultImageArchivesDir } from "./image-archives";
 
 /** Bundle tags published by the OpenEverest 1.16.2 catalog. */
 export const everestOperatorBundleImages = [
@@ -23,14 +24,14 @@ export class K0sEverestOperatorBundles extends pulumi.ComponentResource {
 	) {
 		super("korifi:deploy:K0sEverestOperatorBundles", name, {}, opts);
 
-		const nodes = k0sNodeContainers(args.clusterName);
+		const archivesDir = defaultImageArchivesDir();
+		const scriptPath = path.join(__dirname, "prefetch-images.sh");
 		const script = [
 			"set -euo pipefail",
-			'for NODE in $K0S_NODES; do',
-			'  printf "%s\\n" "$EVEREST_OPERATOR_BUNDLE_IMAGES" | while IFS= read -r IMAGE; do',
-			'    docker exec "$NODE" k0s ctr images pull "$IMAGE"',
-			"  done",
-			"done",
+			'list=$(mktemp)',
+			'printf "%s\\n" "$EVEREST_OPERATOR_BUNDLE_IMAGES" > "$list"',
+			'"$PREFETCH_SCRIPT" --cluster "$K0S_CLUSTER" --images "$list" --archives "$KORIFI_IMAGE_ARCHIVES"',
+			'rm -f "$list"',
 		].join("\n");
 
 		this.loaded = new command.local.Command(
@@ -38,9 +39,15 @@ export class K0sEverestOperatorBundles extends pulumi.ComponentResource {
 			{
 				create: script,
 				update: script,
-				triggers: [args.clusterName, ...everestOperatorBundleImages],
+				triggers: [
+					args.clusterName,
+					archivesDir,
+					...everestOperatorBundleImages,
+				],
 				environment: {
-					K0S_NODES: `${nodes.korifi} ${nodes.osb} ${nodes.knative}`,
+					K0S_CLUSTER: args.clusterName,
+					KORIFI_IMAGE_ARCHIVES: archivesDir,
+					PREFETCH_SCRIPT: scriptPath,
 					EVEREST_OPERATOR_BUNDLE_IMAGES:
 						everestOperatorBundleImages.join("\n"),
 				},

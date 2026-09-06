@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { k0sCoreImages, k0sServiceImages } from "./image-prefetch";
 
 describe("k0s image prefetch manifests", () => {
@@ -19,5 +21,16 @@ describe("k0s image prefetch manifests", () => {
 		expect(k0sServiceImages).toContain(
 			"docker.io/percona/percona-xtradb-cluster:8.0.39-30.1",
 		);
+	});
+
+	test("import tarballs from image-archives instead of pulling", () => {
+		const script = fs.readFileSync(
+			path.join(import.meta.dir, "prefetch-images.sh"),
+			"utf8",
+		);
+		expect(script).toContain("k0s ctr images import");
+		expect(script).toContain("KORIFI_IMAGE_ARCHIVES");
+		expect(script).toContain("manifest.tsv");
+		expect(script).not.toContain("k0s ctr images pull");
 	});
 });

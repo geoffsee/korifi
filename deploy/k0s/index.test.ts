@@ -13,11 +13,13 @@ const sources = fs
 const all = sources.map((file) => file.text).join("\n");
 
 test("k0s stack uses k0s, not kind", () => {
-	expect(all).toContain("k0s controller --enable-worker");
-	expect(all).toContain("k0s worker");
+	expect(all).toContain("--enable-worker");
 	expect(all).toContain("k0s token create");
 	expect(all).toContain("K0sCluster");
 	expect(all).toContain("k0sImage");
+	expect(all).toContain("new docker.Container");
+	expect(all).toContain("new docker.Volume");
+	expect(all).not.toContain("docker run");
 	expect(all).not.toContain("kind create cluster");
 	expect(all).not.toContain("kind load docker-image");
 });
@@ -30,7 +32,9 @@ test("k0s stack is a 3-node docker cluster with role split", () => {
 	expect(all).toContain('placementFor("korifi")');
 	expect(all).toContain('placementFor("osb")');
 	expect(all).toContain("NoSchedule");
-	expect(all).toContain("k0s ctr images");
+	expect(all).toContain("prefetch-images.sh");
+	expect(all).toContain("image-archives");
+	expect(all).toContain("KORIFI_IMAGE_ARCHIVES");
 });
 
 test("k0s stack composes shared lib components", () => {
@@ -71,11 +75,15 @@ test("k0s stack composes shared lib components", () => {
 });
 
 test("k0s cluster maps the same host ports as kind plus the API", () => {
-	expect(all).toContain("6443:6443");
-	expect(all).toContain("80:32080");
-	expect(all).toContain("443:32443");
+	expect(all).toContain("internal: 6443");
+	expect(all).toContain("external: 6443");
+	expect(all).toContain("internal: 32080");
+	expect(all).toContain("external: 80");
+	expect(all).toContain("internal: 32443");
+	expect(all).toContain("external: 443");
 	expect(all).toContain("kindRegistry.nodePort");
-	expect(all).toContain("30443:30443");
+	expect(all).toContain("internal: 30443");
+	expect(all).toContain("external: 30443");
 	expect(all).toContain("containerd.d");
 	expect(all).toContain("io.containerd.cri.v1.images");
 });
